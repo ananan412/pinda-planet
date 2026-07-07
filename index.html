@@ -37,7 +37,16 @@
                 </div>
                 
                 <div class="navbar-search flex items-center gap-3 flex-1 max-w-md mx-auto">
-                    <input type="text" id="search-input" placeholder="🔍 搜索拼搭..." oninput="handleSearch()" class="flex-1 px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:border-purple-500 focus:bg-white transition-all">
+                    <input type="text" id="search-input" placeholder="🔍 搜索拼搭..." onkeypress="if(event.key==='Enter')handleSearch()" class="flex-1 px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:border-purple-500 focus:bg-white transition-all">
+                    <button id="search-btn" onclick="handleSearch()" class="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-medium cursor-pointer hover:from-purple-700 hover:to-pink-600 transition-all flex items-center gap-1">
+                        搜索
+                    </button>
+                    <select id="search-category" onchange="handleSearch()" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium cursor-pointer focus:outline-none focus:border-purple-500 transition-all">
+                        <option value="">全部分类</option>
+                        <option value="carpool">🚗 拼车</option>
+                        <option value="food">🍔 拼单</option>
+                        <option value="game">🎮 组局</option>
+                    </select>
                     <select id="sort-select" onchange="handleSort()" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium cursor-pointer focus:outline-none focus:border-purple-500 transition-all">
                         <option value="latest">最新</option>
                         <option value="oldest">最早</option>

@@ -48,7 +48,9 @@
             <div class="profile-content max-w-6xl mx-auto">
                 <div class="user-card bg-white rounded-2xl p-8 shadow-sm mb-8">
                     <div class="user-info flex items-center gap-6">
-                        <img id="profile-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="用户头像" class="profile-avatar w-24 h-24 rounded-full bg-slate-100">
+                        <div class="profile-avatar-container">
+                            <img id="profile-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23E2E8F0'/%3E%3Ctext x='50' y='58' text-anchor='middle' font-size='30' fill='%2394A3B8'%3E%F0%9F%91%A4%3C/text%3E%3C/svg%3E" alt="用户头像" class="profile-avatar w-24 h-24 rounded-full bg-slate-100" loading="lazy">
+                        </div>
                         <div class="user-details">
                             <h1 class="user-name text-2xl font-bold text-slate-800 mb-2" id="user-name"></h1>
                             <p class="user-email text-slate-500 mb-1" id="user-email"></p>

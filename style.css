@@ -463,12 +463,39 @@ body {
     transition: all 0.3s ease;
     border: 1px solid #E2E8F0;
     box-shadow: var(--shadow-card);
+    position: relative;
 }
 
 .card:hover {
     transform: translateY(-4px);
     border-color: rgba(139, 92, 246, 0.2);
     box-shadow: var(--shadow-hover);
+}
+
+.main-category-tag {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    z-index: 1;
+}
+
+.category-carpool {
+    background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+    color: white;
+}
+
+.category-food {
+    background: linear-gradient(135deg, #F97316 0%, #EF4444 100%);
+    color: white;
+}
+
+.category-game {
+    background: linear-gradient(135deg, #06B6D4 0%, #3B82F6 100%);
+    color: white;
 }
 
 .card-header {
@@ -1396,13 +1423,49 @@ body {
     gap: 24px;
 }
 
-.profile-avatar {
+.profile-avatar-container {
+    position: relative;
     width: 96px;
     height: 96px;
     border-radius: 50%;
-    background: #f1f5f9;
-    object-fit: cover;
+    overflow: hidden;
     border: 4px solid #e2e8f0;
+    background: linear-gradient(135deg, #e2e8f0 0%, #f1f5f9 100%);
+}
+
+.profile-avatar-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        opacity: 0;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+.profile-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    transition: opacity 0.3s ease;
+}
+
+.profile-avatar-container.loaded::before {
+    display: none;
 }
 
 .user-details {

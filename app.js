@@ -519,7 +519,7 @@ function getEffectiveCategory() {
 
 const gameCategories = ['剧本杀', '密室逃脱', 'Livehouse/演出', '桌游/棋牌', '运动竞技'];
 
-async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort = 'latest') {
+async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort = 'latest', searchCategory = '') {
     try {
         const filter = {};
         const inFilter = {};
@@ -537,9 +537,15 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
             }
         }
         
+        if (searchCategory && searchCategory !== '') {
+            if (!filter['type']) {
+                filter['type'] = `eq.${searchCategory}`;
+            }
+        }
+        
         if (keyword && keyword.trim()) {
             const searchTerm = keyword.trim().toLowerCase();
-            filter['or'] = `(title.ilike.%${searchTerm}%,content.ilike.%${searchTerm}%)`;
+            filter['or'] = `(title.ilike.%${searchTerm}%,content.ilike.%${searchTerm}%,departure.ilike.%${searchTerm}%,destination.ilike.%${searchTerm}%,product_name.ilike.%${searchTerm}%,product_location.ilike.%${searchTerm}%,game_type.ilike.%${searchTerm}%,game_location.ilike.%${searchTerm}%,location_name.ilike.%${searchTerm}%)`;
         }
         
         const orderParam = sort === 'oldest' ? 'created_at.asc' : 'created_at.desc';
@@ -588,9 +594,22 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
 async function handleSearch() {
     const keyword = document.getElementById('search-input')?.value || '';
     const sort = document.getElementById('sort-select')?.value || 'latest';
+    const searchCategory = document.getElementById('search-category')?.value || '';
     
     showSkeleton();
-    const { data } = await fetchPosts(keyword, 1, 50, getEffectiveCategory(), sort);
+    Object.keys(requestCache).forEach(key => delete requestCache[key]);
+    
+    const tabs = document.querySelectorAll('.category-tab');
+    
+    if (keyword.trim()) {
+        tabs.forEach(tab => tab.classList.remove('active'));
+    } else if (!searchCategory) {
+        const activeTab = tabs[0];
+        if (activeTab) activeTab.classList.add('active');
+        currentMainCategory = 'carpool';
+    }
+    
+    const { data } = await fetchPosts(keyword, 1, 50, searchCategory, sort, '');
     hideSkeleton();
     await renderCards(data);
 }
@@ -598,9 +617,11 @@ async function handleSearch() {
 async function handleSort() {
     const keyword = document.getElementById('search-input')?.value || '';
     const sort = document.getElementById('sort-select')?.value || 'latest';
+    const searchCategory = document.getElementById('search-category')?.value || '';
     
     showSkeleton();
-    const { data } = await fetchPosts(keyword, 1, 50, getEffectiveCategory(), sort);
+    Object.keys(requestCache).forEach(key => delete requestCache[key]);
+    const { data } = await fetchPosts(keyword, 1, 50, searchCategory, sort, '');
     hideSkeleton();
     await renderCards(data);
 }
@@ -760,6 +781,12 @@ async function renderCard(item, memberStatusMap = {}) {
         'game': categoryNames[item.category] || '娱乐舱组局'
     };
     
+    const mainCategoryLabels = {
+        'carpool': { label: '🚗 拼车', class: 'category-carpool' },
+        'food': { label: '🍔 拼单', class: 'category-food' },
+        'game': { label: '🎮 组局', class: 'category-game' }
+    };
+    
     let extraInfo = '';
     
     if (type === 'carpool') {
@@ -841,8 +868,11 @@ async function renderCard(item, memberStatusMap = {}) {
         statusInfo = { text: '', class: '' };
     }
     
+    const mainCategory = mainCategoryLabels[type] || { label: '', class: '' };
+    
     return `
         <div class="card ${cardClass}" data-id="${item.id}">
+            ${mainCategory.label ? `<div class="main-category-tag ${mainCategory.class}">${mainCategory.label}</div>` : ''}
             <div class="card-header">
                 <div class="card-icon">${typeIcons[type]}</div>
                 <div>
@@ -1718,6 +1748,22 @@ function renderPostList(posts, isCreator, showMemberStatus = false) {
     }).join('');
 }
 
+async function handleLogout() {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.currentUser = null;
+    updateHeaderUser();
+    
+    if (window.supabaseClient) {
+        const { error } = await window.supabaseClient.auth.signOut();
+        if (error) {
+            console.error('❌ Sign out failed:', error);
+        }
+    }
+    
+    window.location.href = 'index.html';
+}
+
 function initHeaderButtons() {
     console.log('🔄 initHeaderButtons: 开始初始化头部按钮');
     
@@ -1737,23 +1783,10 @@ function initHeaderButtons() {
     }
     
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', async () => {
-            console.log('🖱️ logoutBtn clicked');
-            localStorage.clear();
-            sessionStorage.clear();
-            window.currentUser = null;
-            updateHeaderUser();
-            
-            if (window.supabaseClient) {
-                const { error } = await window.supabaseClient.auth.signOut();
-                if (error) {
-                    console.error('❌ Sign out failed:', error);
-                }
-            }
-            
-            alert('已退出登录');
-        });
+        logoutBtn.addEventListener('click', handleLogout);
     }
+    
+    window.handleLogout = handleLogout;
     
     if (profileBtn) {
         profileBtn.addEventListener('click', () => {
@@ -2531,11 +2564,8 @@ function updateHeaderUser() {
 }
 
 function initProfilePage() {
-    console.log('🔄 initProfilePage: 初始化个人主页');
-    
     const userId = window.currentUser?.id;
     if (!userId) {
-        console.log('🔓 用户未登录，跳转到首页');
         window.location.href = 'index.html';
         return;
     }
@@ -2544,9 +2574,6 @@ function initProfilePage() {
     const targetUserId = params.get('user_id');
     const isViewingOther = targetUserId && targetUserId !== userId;
     
-    console.log('当前的登录用户ID:', userId);
-    console.log('目标用户ID:', targetUserId, '是否查看他人:', isViewingOther);
-    
     if (isViewingOther) {
         const navbarTitle = document.getElementById('navbar-title');
         const navbarActions = document.getElementById('navbar-actions');
@@ -2554,16 +2581,26 @@ function initProfilePage() {
         if (navbarTitle) navbarTitle.textContent = '用户主页';
         if (navbarActions) navbarActions.style.display = 'none';
         
-        loadUserInfo(targetUserId);
-        loadProfileCounts(targetUserId);
-        
         document.querySelectorAll('.action-card').forEach(card => {
             card.style.pointerEvents = 'none';
             card.style.opacity = '0.6';
         });
     } else {
-        loadUserInfo(userId);
-        loadProfileCounts(userId);
+        if (window.currentUser) {
+            fillUserInfo({
+                id: window.currentUser.id,
+                email: window.currentUser.email,
+                username: window.currentUser.email?.split('@')[0],
+                avatar_url: window.currentUser.avatar_url,
+                role: window.currentUser.role || 'citizen'
+            });
+        }
+    }
+    
+    loadUserInfo(isViewingOther ? targetUserId : userId);
+    loadProfileCounts(isViewingOther ? targetUserId : userId);
+    
+    if (!isViewingOther) {
         initProfileEditButtons();
     }
 }
@@ -2722,14 +2759,11 @@ async function loadProfileCounts(userId) {
 }
 
 async function loadUserInfo(userId) {
-    console.log('📥 loadUserInfo: 加载用户信息, userId:', userId);
-    
     try {
         let userData = null;
         
-        console.log('🔍 使用 supabaseFetch 查询用户信息');
         const fetchResult = await supabaseFetch('planet_users', {
-            select: '*',
+            select: 'id,username,avatar_url,email,gender,phone,wechat,role,created_at',
             filter: {
                 'id': `eq.${userId}`
             },
@@ -2863,13 +2897,28 @@ function fillUserInfo(user) {
     if (createdEl) createdEl.innerText = user.created_at ? new Date(user.created_at).toLocaleDateString('zh-CN') : '';
     
     if (avatarEl) {
+        const container = avatarEl.parentElement;
+        if (container) container.classList.remove('loaded');
+        
+        const loadAvatar = (src) => {
+            avatarEl.onload = () => {
+                if (container) container.classList.add('loaded');
+            };
+            avatarEl.onerror = () => {
+                const seed = user.avatar_seed || user.username || user.email || 'user';
+                avatarEl.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+                if (container) container.classList.add('loaded');
+            };
+            avatarEl.src = src;
+            avatarEl.alt = displayName;
+        };
+        
         if (user.avatar_url) {
-            avatarEl.src = user.avatar_url;
+            loadAvatar(user.avatar_url);
         } else {
             const seed = user.avatar_seed || user.username || user.email || 'user';
-            avatarEl.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+            loadAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`);
         }
-        avatarEl.alt = displayName;
     }
     
     const editUsernameEl = document.getElementById('edit-username');
