@@ -8,9 +8,7 @@ const SUPABASE_URL = 'https://kjinvmhqxejplvbvrsug.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqaW52bWhxeGVqcGx2YnZyc3VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MTE5OTcsImV4cCI6MjA5ODI4Nzk5N30.E664tVoPfwvBVsugcEig7VtMDRy8xVRZZyczFoZUt6w';
 const ADMIN_EMAIL = 'admin@cdtu.edu.cn';
 
-console.log('🚀 app.js 开始加载');
-console.log('📋 当前 window.supabase:', window.supabase);
-console.log('📋 当前 window.supabase 类型:', typeof window.supabase);
+const requestCache = {};
 
 const typeIcons = {
     carpool: '🚀',
@@ -143,6 +141,13 @@ async function supabaseFetch(table, options = {}) {
         }
     }
     
+    if (method === 'GET') {
+        const cacheKey = url;
+        if (requestCache[cacheKey]) {
+            return { data: requestCache[cacheKey], error: null, status: 200, ok: true };
+        }
+    }
+    
     try {
         let authToken = SUPABASE_KEY;
         
@@ -196,7 +201,11 @@ async function supabaseFetch(table, options = {}) {
             console.warn('⚠️ supabaseFetch: PATCH/POST 返回空数组，可能没有匹配的行');
         }
         
-        console.log('✅ supabaseFetch 成功:', data.length || data);
+        if (method === 'GET') {
+            const cacheKey = url;
+            requestCache[cacheKey] = data;
+        }
+        
         return { data, error: null, status: response.status, ok: response.ok };
         
     } catch (error) {
@@ -244,12 +253,6 @@ async function testNetworkConnection() {
 
 async function initSupabase() {
     try {
-        console.log('🔍 开始初始化 Supabase...');
-        
-        console.log('📋 window.supabase 类型:', typeof window.supabase);
-        console.log('📋 window.supabase 对象:', window.supabase);
-        console.log('📋 window.supabase 完整结构:', JSON.stringify(Object.keys(window.supabase || {})));
-        
         if (!window.supabase) {
             console.error('❌ Supabase SDK 未加载');
             alert('Supabase SDK 加载失败，请检查网络连接');
@@ -259,25 +262,18 @@ async function initSupabase() {
 
         let createClientFn = null;
         if (typeof window.supabase.createClient === 'function') {
-            console.log('✅ 使用 window.supabase.createClient');
             createClientFn = window.supabase.createClient;
         } else if (window.supabase.default && typeof window.supabase.default.createClient === 'function') {
-            console.log('✅ 使用 window.supabase.default.createClient');
             createClientFn = window.supabase.default.createClient;
         } else if (typeof window.supabase === 'function') {
-            console.log('✅ 使用 window.supabase 直接调用');
             createClientFn = window.supabase;
         } else if (window.supabase.SupabaseClient) {
-            console.log('✅ 使用 new window.supabase.SupabaseClient');
             createClientFn = (url, key) => new window.supabase.SupabaseClient(url, key);
         } else {
-            console.log('📋 尝试遍历 window.supabase 查找 createClient...');
             for (const key of Object.keys(window.supabase)) {
                 const val = window.supabase[key];
                 if (typeof val === 'function' || (typeof val === 'object' && val.createClient)) {
-                    console.log(`📋 发现可能的方法: ${key}, 类型: ${typeof val}`);
                     if (typeof val.createClient === 'function') {
-                        console.log('✅ 通过遍历找到 window.supabase.' + key + '.createClient');
                         createClientFn = val.createClient;
                         break;
                     }
@@ -287,53 +283,27 @@ async function initSupabase() {
 
         if (!createClientFn) {
             console.error('❌ 无法找到 createClient 方法');
-            console.error('📋 window.supabase 完整输出:', window.supabase);
             alert('无法初始化 Supabase，请检查 CDN 是否正常加载');
             showEmptyState();
             return;
         }
 
-        console.log('🔑 创建 Supabase 客户端...');
         window.supabaseClient = createClientFn(SUPABASE_URL, SUPABASE_KEY);
-        
-        console.log('✅ Supabase 初始化成功');
-        console.log('📋 window.supabaseClient 类型:', typeof window.supabaseClient);
-        console.log('📋 window.supabaseClient.from 类型:', typeof window.supabaseClient.from);
-        console.log('📋 window.supabaseClient.auth 类型:', typeof window.supabaseClient.auth);
-        
-        console.log('🔍 开始网络诊断测试...');
-        testNetworkConnection();
         
         if (typeof window.supabaseClient.from !== 'function') {
             console.error('❌ window.supabaseClient.from 不是函数');
-            console.error('📋 window.supabaseClient 完整结构:', Object.keys(window.supabaseClient));
             alert('Supabase 客户端初始化异常，请检查控制台');
             showEmptyState();
             return;
         }
         
         setupAuthListener();
-        console.log('🔍 准备检查认证状态...');
-        try {
-            await checkAuthStatus();
-            console.log('✅ 认证状态检查完成');
-        } catch (error) {
-            console.error('❌ 认证状态检查失败:', error);
-            console.log('🔍 继续执行后续逻辑...');
-        }
-        
-        const isProfilePage = window.location.pathname.endsWith('profile.html');
-        if (isProfilePage) {
-            console.log('🔍 当前是个人主页，等待 onAuthStateChange 触发初始化');
-        } else {
-            console.log('🔍 当前是首页，跳过个人主页初始化');
-        }
         
         initDetailModal();
         
-        console.log('✅ initSupabase 函数即将完成');
-        console.log('📋 window.supabaseClient.from:', typeof window.supabaseClient.from);
-        console.log('📋 window.supabaseClient:', window.supabaseClient);
+        setTimeout(() => {
+            checkAuthStatus().catch(() => {});
+        }, 1000);
         
     } catch (error) {
         console.error('❌ Supabase 初始化异常:', error);
@@ -519,13 +489,15 @@ async function loadData() {
     }
     
     try {
-        await autoExpirePosts();
+        setTimeout(autoExpirePosts, 2000);
         
         if (!currentLocation) {
-            try {
-                await requestLocation();
-            } catch (e) {
-            }
+            requestLocation().then(() => {
+                const sort = document.getElementById('sort-select')?.value || 'latest';
+                fetchPosts('', 1, 50, getEffectiveCategory(), sort).then(({ data }) => {
+                    renderCards(data);
+                });
+            }).catch(() => {});
         }
         
         const sort = document.getElementById('sort-select')?.value || 'latest';
@@ -536,7 +508,6 @@ async function loadData() {
         
     } catch (error) {
         console.error('❌ 加载数据失败:', error);
-        console.error('❌ 堆栈:', error.stack);
         hideSkeleton();
         showEmptyState();
     }
