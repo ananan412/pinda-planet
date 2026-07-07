@@ -574,7 +574,7 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
         const orderParam = sort === 'oldest' ? 'created_at.asc' : 'created_at.desc';
         
         const { data, error } = await supabaseFetch('planets_posts', {
-            select: 'id,title,content,type,category,status,current_participants,max_participants,creator_id,user_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at',
+            select: 'id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at',
             filter,
             inFilter,
             order: orderParam,
@@ -712,7 +712,7 @@ async function renderCard(item, memberStatusMap = {}) {
         const currentMembers = actualMembers + 1;
         const progress = Math.min((currentMembers / maxMembers) * 100, 100);
         const isFull = currentMembers >= maxMembers;
-        const isCreator = window.currentUser && (item.creator_id === window.currentUser.id || item.user_id === window.currentUser.id);
+        const isCreator = window.currentUser && item.creator_id === window.currentUser.id;
         
         const deadlineTime = item.departure_time || item.game_time || null;
         const isExpired = deadlineTime ? (new Date() > new Date(deadlineTime)) : false;
@@ -750,7 +750,7 @@ async function renderCard(item, memberStatusMap = {}) {
         } else if (isFull) {
             joinButton = '<button class="join-btn btn-disabled">已满</button>';
         } else {
-            joinButton = `<button class="join-btn" onclick="joinGroup('${item.id}', '${item.user_id}', ${currentMembers}, ${maxMembers})">申请加入</button>`;
+            joinButton = `<button class="join-btn" onclick="joinGroup('${item.id}', '${item.creator_id}', ${currentMembers}, ${maxMembers})">申请加入</button>`;
         }
     }
     
@@ -995,7 +995,7 @@ async function showPostDetail(postId) {
     
     try {
         const { data: postData, error: postError } = await supabaseFetch('planets_posts', {
-            select: 'id,title,content,type,category,status,current_participants,max_participants,creator_id,user_id,departure,destination,departure_time,cost,product_name,product_link,product_price,product_group_price,product_type,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at',
+            select: 'id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_link,product_price,product_group_price,product_type,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at',
             filter: { 'id': `eq.${postId}` }
         });
         
@@ -1005,7 +1005,7 @@ async function showPostDetail(postId) {
         }
         
         const post = postData[0];
-        const creatorId = post.creator_id || post.user_id;
+        const creatorId = post.creator_id;
         
         const [creatorInfo, membersData] = await Promise.all([
             fetchUserInfo(creatorId),
@@ -1419,7 +1419,7 @@ async function loadModalData(type) {
                 }
                 const { data: createdPosts, error: createdError } = await window.supabaseClient
                     .from('planets_posts')
-                    .select('*')
+                    .select('id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at')
                     .eq('creator_id', userId)
                     .order('created_at', { ascending: false });
                 
@@ -1442,7 +1442,7 @@ async function loadModalData(type) {
                 const [completedAsCreatorResult, completedAsMemberResult] = await Promise.all([
                     window.supabaseClient
                         .from('planets_posts')
-                        .select('*')
+                        .select('id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at')
                         .eq('creator_id', userId)
                         .in('status', ['completed', 'cancelled', 'expired']),
                     window.supabaseClient
@@ -1457,7 +1457,7 @@ async function loadModalData(type) {
                 const completedAsMemberGroupIds = (completedAsMemberResult.data || []).map(m => m.group_id);
                 const completedAsMemberPostsResult = await window.supabaseClient
                     .from('planets_posts')
-                    .select('*')
+                    .select('id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at')
                     .in('id', completedAsMemberGroupIds)
                     .in('status', ['completed', 'cancelled', 'expired']);
                 const completedAsMember = completedAsMemberPostsResult.data || [];
@@ -1497,7 +1497,7 @@ async function loadModalData(type) {
                 const groupIds = memberData.map(m => m.group_id);
                 const postsResult2 = await window.supabaseClient
                     .from('planets_posts')
-                    .select('*')
+                    .select('id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at')
                     .in('id', groupIds)
                     .order('created_at', { ascending: false });
                 console.log('🔍 查询到的拼搭:', postsResult2.data);
@@ -1620,7 +1620,7 @@ async function loadModalData(type) {
                     const myPendingGroupIds = myPendingMembers.map(m => m.group_id);
                     const myPendingPostsResult = await window.supabaseClient
                         .from('planets_posts')
-                        .select('*')
+                        .select('id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at')
                         .in('id', myPendingGroupIds);
                     const myPendingPosts = myPendingPostsResult.data || [];
                     
@@ -2939,7 +2939,7 @@ async function loadUserPosts(userId) {
     
     try {
         const { data, error } = await supabaseFetch('planets_posts', {
-            select: '*',
+            select: 'id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at',
             filter: {
                 'creator_id': `eq.${userId}`
             },
@@ -2999,7 +2999,7 @@ async function loadUserJoinedGroups(userId) {
         }
         
         const { data: postsData, error: postsError } = await supabaseFetch('planets_posts', {
-            select: '*',
+            select: 'id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at',
             inFilter: {
                 'id': groupIds
             },
@@ -3246,7 +3246,7 @@ async function loadCompletedGroups(userId) {
     
     try {
         const { data, error } = await supabaseFetch('planets_posts', {
-            select: '*',
+            select: 'id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at',
             filter: {
                 'creator_id': `eq.${userId}`
             },
