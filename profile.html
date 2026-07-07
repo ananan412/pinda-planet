@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>个人主页 - 拼搭星球</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        console.log('📥 开始加载 Supabase SDK...');
+        
+        function onSupabaseLoaded() {
+            console.log('✅ Supabase SDK 加载成功');
+            console.log('📋 window.supabase:', window.supabase);
+            console.log('📋 window.supabase.createClient:', typeof window.supabase.createClient);
+        }
+        
+        function loadSupabaseFallback() {
+            console.warn('⚠️ 主 CDN 加载失败，尝试备用 CDN...');
+            var script = document.createElement('script');
+            script.src = 'https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
+            script.onload = onSupabaseLoaded;
+            script.onerror = function() {
+                console.error('❌ 备用 CDN 也加载失败，请检查网络连接');
+            };
+            document.head.appendChild(script);
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" onload="onSupabaseLoaded()" onerror="loadSupabaseFallback()"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+</head>
+<body class="profile-page">
+    <div class="profile-container min-h-screen flex flex-col bg-slate-50">
+        <nav class="navbar sticky top-0 z-50 bg-white shadow-sm h-16 flex items-center px-6">
+            <div class="navbar-content flex items-center justify-between w-full">
+                <button class="back-btn px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-medium cursor-pointer hover:bg-slate-50 transition-all" onclick="window.location.href='index.html'">
+                    ← 返回首页
+                </button>
+                <span class="logo-text text-lg font-bold bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent" id="navbar-title">个人中心</span>
+                <div class="flex gap-3" id="navbar-actions">
+                    <button class="edit-profile-btn px-3 py-1.5 rounded-lg border border-purple-500 bg-purple-50 text-purple-600 text-sm font-medium cursor-pointer hover:bg-purple-100 transition-all" onclick="showEditProfileModal()">✏️ 编辑资料</button>
+                    <button class="logout-btn px-3 py-1.5 rounded-lg border border-pink-500 bg-pink-50 text-pink-600 text-sm font-medium cursor-pointer hover:bg-pink-100 transition-all" onclick="handleLogout()">🔴 退出登录</button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="profile-main flex-1 overflow-y-auto p-10">
+            <div class="profile-content max-w-6xl mx-auto">
+                <div class="user-card bg-white rounded-2xl p-8 shadow-sm mb-8">
+                    <div class="user-info flex items-center gap-6">
+                        <img id="profile-avatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="用户头像" class="profile-avatar w-24 h-24 rounded-full bg-slate-100">
+                        <div class="user-details">
+                            <h1 class="user-name text-2xl font-bold text-slate-800 mb-2" id="user-name"></h1>
+                            <p class="user-email text-slate-500 mb-1" id="user-email"></p>
+                            <p class="user-role text-sm px-3 py-1 rounded-full bg-purple-50 text-purple-600" id="user-role"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="contact-info mt-6 pt-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="contact-item flex items-center gap-3">
+                            <span class="contact-icon text-xl">👤</span>
+                            <div>
+                                <p class="text-xs text-slate-400">性别</p>
+                                <p class="text-sm font-medium text-slate-700" id="user-gender"></p>
+                            </div>
+                        </div>
+                        <div class="contact-item flex items-center gap-3">
+                            <span class="contact-icon text-xl">📱</span>
+                            <div>
+                                <p class="text-xs text-slate-400">手机号</p>
+                                <p class="text-sm font-medium text-slate-700" id="user-phone"></p>
+                            </div>
+                        </div>
+                        <div class="contact-item flex items-center gap-3">
+                            <span class="contact-icon text-xl">💬</span>
+                            <div>
+                                <p class="text-xs text-slate-400">微信号</p>
+                                <p class="text-sm font-medium text-slate-700" id="user-wechat"></p>
+                            </div>
+                        </div>
+                        <div class="contact-item flex items-center gap-3">
+                            <span class="contact-icon text-xl">📅</span>
+                            <div>
+                                <p class="text-xs text-slate-400">注册时间</p>
+                                <p class="text-sm font-medium text-slate-700" id="user-created"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="profile-actions-grid">
+                    <div class="action-card" onclick="openModal('created')">
+                        <div class="action-icon">🚀</div>
+                        <div class="action-title">我发起的拼搭</div>
+                        <div class="action-count" id="count-created">0</div>
+                    </div>
+                    <div class="action-card" onclick="openModal('pending')">
+                        <div class="action-icon">⏳</div>
+                        <div class="action-title">待处理</div>
+                        <div class="action-count" id="count-pending">0</div>
+                    </div>
+                    <div class="action-card" onclick="openModal('completed')">
+                        <div class="action-icon">✅</div>
+                        <div class="action-title">已结束</div>
+                        <div class="action-count" id="count-completed">0</div>
+                    </div>
+                    <div class="action-card" onclick="openModal('joined')">
+                        <div class="action-icon">👥</div>
+                        <div class="action-title">我参与的拼搭</div>
+                        <div class="action-count" id="count-joined">0</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="edit-profile-modal" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>✏️ 编辑个人资料</h3>
+                <button class="close-btn" onclick="hideEditProfileModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">昵称</label>
+                    <input type="text" id="edit-username" placeholder="输入昵称">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">选择头像</label>
+                    <div class="avatar-upload-wrapper">
+                        <label class="avatar-upload-btn">
+                            📁 从文件选择
+                            <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
+                        </label>
+                        <span class="avatar-or">或</span>
+                        <button class="avatar-preset-btn" onclick="toggleAvatarPicker()">🎨 使用预设头像</button>
+                    </div>
+                    <div id="avatar-picker-container" class="avatar-picker" style="display: none;">
+                        <div class="avatar-option" onclick="selectAvatar('cat')" data-seed="cat">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=cat" alt="cat">
+                        </div>
+                        <div class="avatar-option" onclick="selectAvatar('dog')" data-seed="dog">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=dog" alt="dog">
+                        </div>
+                        <div class="avatar-option" onclick="selectAvatar('rabbit')" data-seed="rabbit">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=rabbit" alt="rabbit">
+                        </div>
+                        <div class="avatar-option" onclick="selectAvatar('bear')" data-seed="bear">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=bear" alt="bear">
+                        </div>
+                        <div class="avatar-option" onclick="selectAvatar('fox')" data-seed="fox">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=fox" alt="fox">
+                        </div>
+                        <div class="avatar-option" onclick="selectAvatar('owl')" data-seed="owl">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=owl" alt="owl">
+                        </div>
+                        <div class="avatar-option" onclick="selectAvatar('penguin')" data-seed="penguin">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=penguin" alt="penguin">
+                        </div>
+                        <div class="avatar-option" onclick="selectAvatar('shark')" data-seed="shark">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=shark" alt="shark">
+                        </div>
+                    </div>
+                    <input type="hidden" id="edit-avatar-seed" value="">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">性别</label>
+                    <div class="gender-select">
+                        <label class="gender-option">
+                            <input type="radio" name="gender" value="male">
+                            <span>👨 男</span>
+                        </label>
+                        <label class="gender-option">
+                            <input type="radio" name="gender" value="female">
+                            <span>👩 女</span>
+                        </label>
+                        <label class="gender-option">
+                            <input type="radio" name="gender" value="other">
+                            <span>⚧️ 其他</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">手机号</label>
+                    <input type="text" id="phone-input" placeholder="输入手机号">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">微信号</label>
+                    <input type="text" id="wechat-input" placeholder="输入微信号">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" onclick="hideEditProfileModal()">取消</button>
+                <button class="save-btn" id="save-all-btn">保存所有修改</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="avatar-crop-modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>✂️ 裁剪头像</h3>
+                <button class="close-btn" onclick="hideCropModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="cropper-container">
+                    <img id="crop-image" src="" alt="裁剪图片">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" onclick="hideCropModal()">取消</button>
+                <button class="save-btn" onclick="confirmCrop()">确认裁剪</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="requests-modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>📋 成员申请</h3>
+                <button class="close-btn" onclick="hideRequestsModal()">✕</button>
+            </div>
+            <div class="modal-body" id="requests-list">
+                <div class="loading">加载中...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" onclick="hideRequestsModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="profile-list-modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 id="profile-modal-title">📋 列表</h3>
+                <button class="close-btn" onclick="closeProfileModal()">✕</button>
+            </div>
+            <div class="modal-body" id="profile-modal-body">
+                <div class="loading">加载中...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" onclick="closeProfileModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员面板 - 拼搭星球</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body class="admin-page">
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <span class="logo-emoji">🛡️</span>
+                <h1 class="site-title">管理员面板</h1>
+            </div>
+            <div class="header-user">
+                <button class="logout-btn" onclick="handleLogout()">🔴 退出登录</button>
+                <button class="profile-btn" onclick="window.location.href='profile.html'">👤 个人主页</button>
+                <button class="back-btn" onclick="window.location.href='index.html'">🏠 返回首页</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="admin-content">
+        <div class="admin-dashboard">
+            <div class="dashboard-title">📊 数据概览</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-users">0</div>
+                    <div class="stat-label">总用户数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-groups">0</div>
+                    <div class="stat-label">拼搭项目</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-members">0</div>
+                    <div class="stat-label">成员总数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-pending">0</div>
+                    <div class="stat-label">待审核申请</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <div class="section-header">
+                <h2 class="section-title">👥 用户管理</h2>
+                <div class="search-box">
+                    <input type="text" id="user-search-input" placeholder="搜索用户邮箱..." oninput="filterUsers()">
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>邮箱</th>
+                            <th>昵称</th>
+                            <th>角色</th>
+                            <th>注册时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <tr><td colspan="6" class="loading">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <div class="section-header">
+                <h2 class="section-title">🪐 拼搭管理</h2>
+                <div class="search-box">
+                    <input type="text" id="group-search-input" placeholder="搜索拼搭名称..." oninput="filterGroups()">
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>类型</th>
+                            <th>名称</th>
+                            <th>发起人</th>
+                            <th>状态</th>
+                            <th>成员数</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="groups-table-body">
+                        <tr><td colspan="8" class="loading">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="admin-section">
+            <div class="section-header">
+                <h2 class="section-title">⏳ 待审核申请</h2>
+            </div>
+            <div class="table-container">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>拼搭名称</th>
+                            <th>申请人</th>
+                            <th>申请时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pending-table-body">
+                        <tr><td colspan="5" class="loading">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const storedUser = localStorage.getItem('pinda_user');
+                if (storedUser) {
+                    window.currentUser = JSON.parse(storedUser);
+                    console.log('✅ 从缓存恢复用户:', window.currentUser.email);
+                }
+                
+                await initSupabase();
+                
+                if (!window.currentUser) {
+                    document.body.innerHTML = `
+                        <div style="text-align: center; padding: 100px 20px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh;">
+                            <h2 style="color: #FFB3C6;">🔒 权限不足</h2>
+                            <p style="margin-top: 20px; color: rgba(255,255,255,0.6);">此页面仅管理员可访问</p>
+                            <button onclick="window.location.href='index.html'" style="margin-top: 30px; padding: 12px 30px; border-radius: 24px; border: none; background: linear-gradient(135deg, #D4A5F7 0%, #FFB3C6 100%); color: white; font-weight: 600; cursor: pointer;">返回首页</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                console.log('🔍 查询 planet_admins 表验证管理员身份');
+                const { data: adminData, error: adminError } = await window.supabaseClient
+                    .from('planet_admins')
+                    .select('user_id')
+                    .eq('user_id', window.currentUser.id)
+                    .limit(1);
+                
+                if (adminError || !adminData || adminData.length === 0) {
+                    document.body.innerHTML = `
+                        <div style="text-align: center; padding: 100px 20px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh;">
+                            <h2 style="color: #FFB3C6;">🔒 权限不足</h2>
+                            <p style="margin-top: 20px; color: rgba(255,255,255,0.6);">此页面仅管理员可访问</p>
+                            <button onclick="window.location.href='index.html'" style="margin-top: 30px; padding: 12px 30px; border-radius: 24px; border: none; background: linear-gradient(135deg, #D4A5F7 0%, #FFB3C6 100%); color: white; font-weight: 600; cursor: pointer;">返回首页</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                console.log('✅ 用户是管理员，允许访问');
+                window.currentUser.role = 'admin';
+                
+                await loadDashboardStats();
+                await loadUsersList();
+                await loadGroupsList();
+                await loadPendingRequests();
+            } catch (error) {
+                console.error('❌ 管理员页面初始化失败:', error);
+                document.body.innerHTML = `
+                    <div style="text-align: center; padding: 100px 20px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh;">
+                        <h2 style="color: #FFB3C6;">❌ 加载失败</h2>
+                        <p style="margin-top: 20px; color: rgba(255,255,255,0.6);">${error.message}</p>
+                        <button onclick="window.location.href='index.html'" style="margin-top: 30px; padding: 12px 30px; border-radius: 24px; border: none; background: linear-gradient(135deg, #D4A5F7 0%, #FFB3C6 100%); color: white; font-weight: 600; cursor: pointer;">返回首页</button>
+                    </div>
+                `;
+            }
+        });
+
+        async function loadDashboardStats() {
+            try {
+                const [usersResult, groupsResult, membersResult, pendingResult] = await Promise.all([
+                    window.supabaseClient.from('planet_users').select('id', { count: 'exact' }),
+                    window.supabaseClient.from('planets_posts').select('id', { count: 'exact' }),
+                    window.supabaseClient.from('planet_members').select('id', { count: 'exact' }),
+                    window.supabaseClient.from('planet_members').select('id', { count: 'exact' }).eq('status', 'pending')
+                ]);
+                
+                document.getElementById('stat-users').textContent = usersResult.count || 0;
+                document.getElementById('stat-groups').textContent = groupsResult.count || 0;
+                document.getElementById('stat-members').textContent = membersResult.count || 0;
+                document.getElementById('stat-pending').textContent = pendingResult.count || 0;
+            } catch (error) {
+                console.error('❌ 加载统计数据失败:', error);
+            }
+        }
+
+        async function loadUsersList() {
+            try {
+                const { data: users, error } = await window.supabaseClient
+                    .from('planet_users')
+                    .select('id, email, username, role, created_at')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                    document.getElementById('users-table-body').innerHTML = `<tr><td colspan="6" class="loading">加载失败：${error.message}</td></tr>`;
+                    return;
+                }
+                
+                if (!users || users.length === 0) {
+                    document.getElementById('users-table-body').innerHTML = `<tr><td colspan="6" class="loading">暂无用户</td></tr>`;
+                    return;
+                }
+                
+                const { data: admins } = await window.supabaseClient
+                    .from('planet_admins')
+                    .select('user_id');
+                const adminIds = new Set(admins ? admins.map(a => a.user_id) : []);
+                
+                document.getElementById('users-table-body').innerHTML = users.map(user => {
+                    const isAdmin = adminIds.has(user.id);
+                    const roleText = isAdmin ? '管理员' : (user.role === 'banned' ? '已封禁' : '居民');
+                    const roleClass = isAdmin ? 'role-admin' : (user.role === 'banned' ? 'role-banned' : 'role-citizen');
+                    
+                    return `
+                    <tr>
+                        <td>${user.id.substring(0, 8)}...</td>
+                        <td>${user.email}</td>
+                        <td>${user.username || '-'}</td>
+                        <td><span class="role-badge ${roleClass}">${roleText}</span></td>
+                        <td>${formatDate(user.created_at)}</td>
+                        <td>
+                            ${!isAdmin ? `
+                                <button class="admin-action-btn ${user.role === 'banned' ? 'btn-unban' : 'btn-ban'}" onclick="toggleUserBan('${user.id}', '${user.role}')">
+                                    ${user.role === 'banned' ? '解除封禁' : '封禁'}
+                                </button>
+                            ` : '<span class="disabled">不可操作</span>'}
+                        </td>
+                    </tr>
+                `}).join('');
+            } catch (error) {
+                console.error('❌ 加载用户列表失败:', error);
+                document.getElementById('users-table-body').innerHTML = `<tr><td colspan="6" class="loading">加载失败：${error.message}</td></tr>`;
+            }
+        }
+
+        async function loadGroupsList() {
+            try {
+                const { data: groups, error } = await window.supabaseClient
+                    .from('planets_posts')
+                    .select('id, type, category, title, creator_id, status, current_participants, max_participants, created_at')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                    document.getElementById('groups-table-body').innerHTML = `<tr><td colspan="8" class="loading">加载失败：${error.message}</td></tr>`;
+                    return;
+                }
+                
+                if (!groups || groups.length === 0) {
+                    document.getElementById('groups-table-body').innerHTML = `<tr><td colspan="8" class="loading">暂无拼搭项目</td></tr>`;
+                    return;
+                }
+                
+                const creatorIds = [...new Set(groups.map(g => g.creator_id))];
+                let creators = {};
+                if (creatorIds.length > 0) {
+                    const { data: users } = await window.supabaseClient
+                        .from('planet_users')
+                        .select('id, email')
+                        .in('id', creatorIds);
+                    creators = users.reduce((acc, u) => ({ ...acc, [u.id]: u.email }), {});
+                }
+                
+                const typeNames = { carpool: '🚀 穿梭机', food: '🧋 能量站', game: '🎮 娱乐舱' };
+                
+                document.getElementById('groups-table-body').innerHTML = groups.map(group => `
+                    <tr>
+                        <td>${group.id.substring(0, 8)}...</td>
+                        <td>${typeNames[group.type] || group.type}</td>
+                        <td>${group.title}</td>
+                        <td>${creators[group.creator_id] || '-'}</td>
+                        <td><span class="status-badge ${group.status === 'open' ? 'status-active' : 'status-ended'}">${group.status === 'open' ? '进行中' : '已结束'}</span></td>
+                        <td>${(group.current_participants || 0) + 1}/${group.max_participants || 1}</td>
+                        <td>${formatDate(group.created_at)}</td>
+                        <td>
+                            <button class="admin-action-btn btn-delete" onclick="deleteGroup('${group.id}')">删除</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('❌ 加载拼搭列表失败:', error);
+                document.getElementById('groups-table-body').innerHTML = `<tr><td colspan="8" class="loading">加载失败：${error.message}</td></tr>`;
+            }
+        }
+
+        async function loadPendingRequests() {
+            try {
+                const { data: requests, error } = await window.supabaseClient
+                    .from('planet_members')
+                    .select('id, group_id, user_id, joined_at')
+                    .eq('status', 'pending')
+                    .order('joined_at', { ascending: false });
+                
+                if (error) {
+                    document.getElementById('pending-table-body').innerHTML = `<tr><td colspan="5" class="loading">加载失败：${error.message}</td></tr>`;
+                    return;
+                }
+                
+                if (!requests || requests.length === 0) {
+                    document.getElementById('pending-table-body').innerHTML = `<tr><td colspan="5" class="loading">暂无待审核申请</td></tr>`;
+                    return;
+                }
+                
+                const groupIds = [...new Set(requests.map(r => r.group_id))];
+                const userIds = [...new Set(requests.map(r => r.user_id))];
+                
+                let groups = {};
+                if (groupIds.length > 0) {
+                    const { data: groupData } = await window.supabaseClient
+                        .from('planets_posts')
+                        .select('id, title')
+                        .in('id', groupIds);
+                    groups = groupData.reduce((acc, g) => ({ ...acc, [g.id]: g.title }), {});
+                }
+                
+                let users = {};
+                if (userIds.length > 0) {
+                    const { data: userData } = await window.supabaseClient
+                        .from('planet_users')
+                        .select('id, email')
+                        .in('id', userIds);
+                    users = userData.reduce((acc, u) => ({ ...acc, [u.id]: u.email }), {});
+                }
+                
+                document.getElementById('pending-table-body').innerHTML = requests.map(req => `
+                    <tr>
+                        <td>${req.id.substring(0, 8)}...</td>
+                        <td>${groups[req.group_id] || '-'}</td>
+                        <td>${users[req.user_id] || '-'}</td>
+                        <td>${formatDate(req.joined_at)}</td>
+                        <td>
+                            <button class="admin-action-btn btn-approve" onclick="adminApproveRequest('${req.id}')">通过</button>
+                            <button class="admin-action-btn btn-reject" onclick="adminRejectRequest('${req.id}')">拒绝</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('❌ 加载待审核列表失败:', error);
+                document.getElementById('pending-table-body').innerHTML = `<tr><td colspan="5" class="loading">加载失败：${error.message}</td></tr>`;
+            }
+        }
+
+        async function toggleUserBan(userId, currentRole) {
+            if (!confirm(currentRole === 'banned' ? '确定解除该用户封禁？' : '确定封禁该用户？封禁后用户将无法正常使用。')) {
+                return;
+            }
+            
+            try {
+                const newRole = currentRole === 'banned' ? 'citizen' : 'banned';
+                const { error } = await window.supabaseClient
+                    .from('planet_users')
+                    .update({ role: newRole })
+                    .eq('id', userId);
+                
+                if (error) {
+                    alert('操作失败：' + error.message);
+                    return;
+                }
+                
+                await loadUsersList();
+                await loadDashboardStats();
+            } catch (error) {
+                console.error('❌ 封禁操作失败:', error);
+                alert('操作失败：' + error.message);
+            }
+        }
+
+        async function deleteGroup(groupId) {
+            if (!confirm('确定删除该拼搭项目？此操作将同时删除所有相关成员记录，且无法撤销。')) {
+                return;
+            }
+            
+            try {
+                const { error: deleteMembersError } = await window.supabaseClient
+                    .from('planet_members')
+                    .delete()
+                    .eq('group_id', groupId);
+                
+                if (deleteMembersError) {
+                    alert('删除成员记录失败：' + deleteMembersError.message);
+                    return;
+                }
+                
+                const { error } = await window.supabaseClient
+                    .from('planets_posts')
+                    .delete()
+                    .eq('id', groupId);
+                
+                if (error) {
+                    alert('删除失败：' + error.message);
+                    return;
+                }
+                
+                await loadGroupsList();
+                await loadDashboardStats();
+            } catch (error) {
+                console.error('❌ 删除拼搭失败:', error);
+                alert('操作失败：' + error.message);
+            }
+        }
+
+        async function adminApproveRequest(requestId) {
+            try {
+                const { error } = await window.supabaseClient
+                    .from('planet_members')
+                    .update({ status: 'approved' })
+                    .eq('id', requestId);
+                
+                if (error) {
+                    alert('操作失败：' + error.message);
+                    return;
+                }
+                
+                await loadPendingRequests();
+                await loadDashboardStats();
+            } catch (error) {
+                console.error('❌ 通过申请失败:', error);
+                alert('操作失败：' + error.message);
+            }
+        }
+
+        async function adminRejectRequest(requestId) {
+            try {
+                const { error } = await window.supabaseClient
+                    .from('planet_members')
+                    .update({ status: 'rejected' })
+                    .eq('id', requestId);
+                
+                if (error) {
+                    alert('操作失败：' + error.message);
+                    return;
+                }
+                
+                await loadPendingRequests();
+                await loadDashboardStats();
+            } catch (error) {
+                console.error('❌ 拒绝申请失败:', error);
+                alert('操作失败：' + error.message);
+            }
+        }
+
+        function filterUsers() {
+            const search = document.getElementById('user-search-input').value.toLowerCase();
+            const rows = document.querySelectorAll('#users-table-body tr');
+            rows.forEach(row => {
+                const email = row.querySelector('td:nth-child(2)')?.textContent || '';
+                const username = row.querySelector('td:nth-child(3)')?.textContent || '';
+                row.style.display = (email.toLowerCase().includes(search) || username.toLowerCase().includes(search)) ? '' : 'none';
+            });
+        }
+
+        function filterGroups() {
+            const search = document.getElementById('group-search-input').value.toLowerCase();
+            const rows = document.querySelectorAll('#groups-table-body tr');
+            rows.forEach(row => {
+                const title = row.querySelector('td:nth-child(3)')?.textContent || '';
+                row.style.display = title.toLowerCase().includes(search) ? '' : 'none';
+            });
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    </script>
+</body>
+</html>

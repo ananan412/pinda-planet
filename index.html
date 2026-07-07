@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>拼搭星球·校园搭子一站式平台</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        console.log('📥 开始加载 Supabase SDK...');
+        
+        function onSupabaseLoaded() {
+            console.log('✅ Supabase SDK 加载成功');
+            console.log('📋 window.supabase:', window.supabase);
+            console.log('📋 window.supabase.createClient:', typeof window.supabase.createClient);
+        }
+        
+        function loadSupabaseFallback() {
+            console.warn('⚠️ 主 CDN 加载失败，尝试备用 CDN...');
+            var script = document.createElement('script');
+            script.src = 'https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
+            script.onload = onSupabaseLoaded;
+            script.onerror = function() {
+                console.error('❌ 备用 CDN 也加载失败，请检查网络连接');
+            };
+            document.head.appendChild(script);
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" onload="onSupabaseLoaded()" onerror="loadSupabaseFallback()"></script>
+</head>
+<body>
+    <div class="app-container min-h-screen flex flex-col bg-slate-50">
+        <nav class="navbar sticky top-0 z-50 bg-white shadow-sm h-16 flex items-center px-6">
+            <div class="navbar-content flex items-center justify-between w-full gap-6">
+                <div class="navbar-logo flex items-center gap-3 flex-shrink-0">
+                    <span class="logo-emoji text-2xl">🪐</span>
+                    <span class="logo-text text-lg font-bold bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent">拼搭星球</span>
+                </div>
+                
+                <div class="navbar-search flex items-center gap-3 flex-1 max-w-md mx-auto">
+                    <input type="text" id="search-input" placeholder="🔍 搜索拼搭..." oninput="handleSearch()" class="flex-1 px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:border-purple-500 focus:bg-white transition-all">
+                    <select id="sort-select" onchange="handleSort()" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium cursor-pointer focus:outline-none focus:border-purple-500 transition-all">
+                        <option value="latest">最新</option>
+                        <option value="oldest">最早</option>
+                        <option value="distance">按距离排序</option>
+                    </select>
+                </div>
+                
+                <div class="navbar-user flex items-center gap-3 flex-shrink-0">
+                    <span class="user-status text-sm px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-700 font-medium" id="user-status">👤 游客居民</span>
+                    <button class="login-trigger-btn px-3 py-1.5 rounded-lg border border-cyan-500 bg-cyan-50 text-cyan-600 text-sm font-medium cursor-pointer hover:bg-cyan-100 transition-all" id="login-trigger-btn" style="display:block;">登录</button>
+                    <button class="logout-btn px-3 py-1.5 rounded-lg border border-pink-500 bg-pink-50 text-pink-600 text-sm font-medium cursor-pointer hover:bg-pink-100 transition-all" id="logout-btn" style="display:none;">登出</button>
+                    <button class="profile-btn px-3 py-1.5 rounded-lg border border-purple-500 bg-purple-50 text-purple-600 text-sm font-medium cursor-pointer hover:bg-purple-100 transition-all" id="profile-btn" style="display:none;">👤 个人主页</button>
+                    <button class="admin-mode-toggle flex items-center gap-2 px-3 py-1.5 rounded-lg border border-pink-300 bg-pink-50 text-pink-600 text-sm font-medium cursor-pointer hover:bg-pink-100 transition-all" id="admin-mode-toggle" title="🛠️ 管理员面板" onclick="window.location.href='admin.html'" style="display:none;">
+                        <span class="admin-icon">🛠️</span>
+                        <span class="admin-text">管理</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="navbar-categories flex flex-row gap-6 mt-4 pb-2 w-full">
+                <button class="category-tab active flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-semibold cursor-pointer transition-all shadow-md" data-category="carpool">
+                    <span class="tab-icon text-lg">🚀</span>
+                    <span class="tab-name">穿梭机拼车</span>
+                </button>
+                <button class="category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent text-slate-600 text-sm font-semibold cursor-pointer hover:bg-slate-100 transition-all" data-category="food">
+                    <span class="tab-icon text-lg">🧋</span>
+                    <span class="tab-name">能量站拼单</span>
+                </button>
+                <button class="category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-transparent text-slate-600 text-sm font-semibold cursor-pointer hover:bg-slate-100 transition-all" data-category="game">
+                    <span class="tab-icon text-lg">🎮</span>
+                    <span class="tab-name">娱乐舱组局</span>
+                </button>
+            </div>
+        </nav>
+
+        <main class="main-content flex-1 overflow-y-auto p-6">
+            <div id="sub-category-bar" class="sub-category-bar flex gap-3 py-4 overflow-x-auto scrollbar-hide mb-4 border-b border-slate-200" style="display:none;">
+                <button class="sub-category-tab active flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-500 text-white text-sm font-medium cursor-pointer transition-all shadow-md flex-shrink-0" data-sub-category="全部">
+                    <span>🌍</span>
+                    <span>全部</span>
+                </button>
+                <button class="sub-category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-medium cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all flex-shrink-0" data-sub-category="剧本杀">
+                    <span>🎭</span>
+                    <span>剧本杀</span>
+                </button>
+                <button class="sub-category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-medium cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all flex-shrink-0" data-sub-category="密室逃脱">
+                    <span>🗝️</span>
+                    <span>密室逃脱</span>
+                </button>
+                <button class="sub-category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-medium cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all flex-shrink-0" data-sub-category="Livehouse/演出">
+                    <span>🎸</span>
+                    <span>Livehouse</span>
+                </button>
+                <button class="sub-category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-medium cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all flex-shrink-0" data-sub-category="桌游/棋牌">
+                    <span>🎲</span>
+                    <span>桌游</span>
+                </button>
+                <button class="sub-category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-medium cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all flex-shrink-0" data-sub-category="饭搭子">
+                    <span>🍱</span>
+                    <span>饭搭子</span>
+                </button>
+                <button class="sub-category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-medium cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all flex-shrink-0" data-sub-category="运动竞技">
+                    <span>🏀</span>
+                    <span>运动</span>
+                </button>
+                <button class="sub-category-tab flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-sm font-medium cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all flex-shrink-0" data-sub-category="其他">
+                    <span>✨</span>
+                    <span>其他</span>
+                </button>
+            </div>
+            
+            <div id="cards-container" class="cards-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div class="skeleton-card bg-white rounded-xl p-5 border border-slate-200 animate-pulse relative overflow-hidden">
+                    <div class="skeleton-icon w-12 h-12 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 mb-4"></div>
+                    <div class="skeleton-title h-5 rounded bg-gradient-to-br from-slate-200 to-slate-300 mb-2 w-3/4"></div>
+                    <div class="skeleton-desc h-4 rounded bg-gradient-to-br from-slate-100 to-slate-200 mb-4 w-full"></div>
+                    <div class="skeleton-progress h-1.5 rounded bg-gradient-to-br from-slate-200 to-slate-300 w-2/3"></div>
+                </div>
+                <div class="skeleton-card bg-white rounded-xl p-5 border border-slate-200 animate-pulse relative overflow-hidden">
+                    <div class="skeleton-icon w-12 h-12 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 mb-4"></div>
+                    <div class="skeleton-title h-5 rounded bg-gradient-to-br from-slate-200 to-slate-300 mb-2 w-3/4"></div>
+                    <div class="skeleton-desc h-4 rounded bg-gradient-to-br from-slate-100 to-slate-200 mb-4 w-full"></div>
+                    <div class="skeleton-progress h-1.5 rounded bg-gradient-to-br from-slate-200 to-slate-300 w-2/3"></div>
+                </div>
+                <div class="skeleton-card bg-white rounded-xl p-5 border border-slate-200 animate-pulse relative overflow-hidden">
+                    <div class="skeleton-icon w-12 h-12 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 mb-4"></div>
+                    <div class="skeleton-title h-5 rounded bg-gradient-to-br from-slate-200 to-slate-300 mb-2 w-3/4"></div>
+                    <div class="skeleton-desc h-4 rounded bg-gradient-to-br from-slate-100 to-slate-200 mb-4 w-full"></div>
+                    <div class="skeleton-progress h-1.5 rounded bg-gradient-to-br from-slate-200 to-slate-300 w-2/3"></div>
+                </div>
+                <div class="skeleton-card bg-white rounded-xl p-5 border border-slate-200 animate-pulse relative overflow-hidden">
+                    <div class="skeleton-icon w-12 h-12 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 mb-4"></div>
+                    <div class="skeleton-title h-5 rounded bg-gradient-to-br from-slate-200 to-slate-300 mb-2 w-3/4"></div>
+                    <div class="skeleton-desc h-4 rounded bg-gradient-to-br from-slate-100 to-slate-200 mb-4 w-full"></div>
+                    <div class="skeleton-progress h-1.5 rounded bg-gradient-to-br from-slate-200 to-slate-300 w-2/3"></div>
+                </div>
+                <div class="skeleton-card bg-white rounded-xl p-5 border border-slate-200 animate-pulse relative overflow-hidden">
+                    <div class="skeleton-icon w-12 h-12 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 mb-4"></div>
+                    <div class="skeleton-title h-5 rounded bg-gradient-to-br from-slate-200 to-slate-300 mb-2 w-3/4"></div>
+                    <div class="skeleton-desc h-4 rounded bg-gradient-to-br from-slate-100 to-slate-200 mb-4 w-full"></div>
+                    <div class="skeleton-progress h-1.5 rounded bg-gradient-to-br from-slate-200 to-slate-300 w-2/3"></div>
+                </div>
+                <div class="skeleton-card bg-white rounded-xl p-5 border border-slate-200 animate-pulse relative overflow-hidden">
+                    <div class="skeleton-icon w-12 h-12 rounded-lg bg-gradient-to-br from-slate-200 to-slate-300 mb-4"></div>
+                    <div class="skeleton-title h-5 rounded bg-gradient-to-br from-slate-200 to-slate-300 mb-2 w-3/4"></div>
+                    <div class="skeleton-desc h-4 rounded bg-gradient-to-br from-slate-100 to-slate-200 mb-4 w-full"></div>
+                    <div class="skeleton-progress h-1.5 rounded bg-gradient-to-br from-slate-200 to-slate-300 w-2/3"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <button class="fab-button fixed bottom-8 right-8 flex items-center gap-3 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold cursor-pointer shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all z-50" id="fab-button">
+        <span class="fab-icon text-xl font-light">+</span>
+        <span class="fab-text">发起拼搭</span>
+    </button>
+
+    <div class="modal-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50 opacity-0 invisible transition-all duration-300" id="modal-overlay">
+        <div class="modal-card bg-white rounded-2xl w-90 max-w-md mx-4 transform scale-90 transition-transform duration-300 flex flex-col" style="max-height: 85vh;">
+            <button class="modal-close absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-lg cursor-pointer hover:bg-slate-200 transition-colors z-10" id="modal-close">✕</button>
+            <h2 class="modal-title text-xl font-bold text-center text-slate-800 mb-4 pt-4">🌍 发起新拼搭</h2>
+            <form class="create-form flex-1 flex flex-col" id="create-form">
+            <div class="modal-form-content overflow-y-auto px-6 pb-4">
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">主分类</label>
+                    <select id="form-type" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                        <option value="">请选择主分类</option>
+                        <option value="carpool">🚀 穿梭机拼车</option>
+                        <option value="food">🧋 能量站拼单</option>
+                        <option value="game">🎮 娱乐舱组局</option>
+                    </select>
+                </div>
+
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">📍 当前位置</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="form-location" placeholder="点击获取位置或手动输入" class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                        <button type="button" onclick="fetchCurrentLocation()" class="px-4 py-2 rounded-lg border border-purple-500 bg-purple-50 text-purple-600 text-sm font-medium cursor-pointer hover:bg-purple-100 transition-all">📍</button>
+                    </div>
+                    <input type="hidden" id="form-lat">
+                    <input type="hidden" id="form-lng">
+                </div>
+
+                <div id="form-fields-carpool" class="form-group" style="display:none;">
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">🚗 出发地</label>
+                        <input type="text" id="form-departure" placeholder="输入出发地点" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">📍 目的地</label>
+                        <input type="text" id="form-destination" placeholder="输入目的地" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">⏰ 出发时间</label>
+                        <input type="datetime-local" id="form-departure-time" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">💰 预计费用</label>
+                        <input type="number" id="form-cost" placeholder="预计人均费用（元）" min="0" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                </div>
+
+                <div id="form-fields-food" class="form-group" style="display:none;">
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">🛒 商品名称</label>
+                        <input type="text" id="form-product-name" placeholder="输入商品名称" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">🔗 商品链接 <span class="text-xs text-slate-400">(选填)</span></label>
+                        <input type="url" id="form-product-link" placeholder="淘宝/拼多多/京东等商品链接，线下拼单可留空" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">💰 单价（原价）</label>
+                        <input type="number" id="form-product-price" placeholder="商品原价（元）" min="0" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">💰 拼单价（人均）</label>
+                        <input type="number" id="form-product-group-price" placeholder="拼单后的人均价格（元）" min="0" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">📦 商品类型</label>
+                        <select id="form-product-type" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                            <option value="">请选择商品类型</option>
+                            <option value="零食">� 零食小吃</option>
+                            <option value="日用品">� 日用百货</option>
+                            <option value="数码">📱 数码产品</option>
+                            <option value="美妆">💄 美妆护肤</option>
+                            <option value="服饰">👔 服饰鞋包</option>
+                            <option value="食品">🍞 食品生鲜</option>
+                            <option value="图书">📚 图书文具</option>
+                            <option value="其他">✨ 其他</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">📍 取货地点</label>
+                        <input type="text" id="form-product-location" placeholder="拼单后在哪里取货" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">⏰ 截止时间</label>
+                        <input type="datetime-local" id="form-product-deadline" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                </div>
+
+                <div id="form-fields-game" class="form-group" style="display:none;">
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">🎮 游戏类型</label>
+                        <select id="form-game-type" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                            <option value="">请选择游戏类型</option>
+                            <option value="剧本杀">🎭 剧本杀</option>
+                            <option value="密室逃脱">🗝️ 密室逃脱</option>
+                            <option value="Livehouse/演出">🎸 Livehouse/演出</option>
+                            <option value="桌游/棋牌">🎲 桌游/棋牌</option>
+                            <option value="运动竞技">🏀 运动竞技</option>
+                            <option value="其他">✨ 其他</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">📍 活动地点</label>
+                        <input type="text" id="form-game-location" placeholder="输入活动地点" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">⏰ 活动时间</label>
+                        <input type="datetime-local" id="form-game-time" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">💰 预计费用</label>
+                        <input type="number" id="form-game-cost" placeholder="预计人均费用（元）" min="0" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                </div>
+
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">标题</label>
+                    <input type="text" id="form-title" placeholder="输入拼搭标题" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                </div>
+
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">内容描述</label>
+                    <textarea id="form-content" placeholder="描述拼搭详情..." rows="4" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 resize-none"></textarea>
+                </div>
+
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">人数限制</label>
+                    <div class="form-row flex items-center gap-3">
+                        <input type="number" id="form-current" value="1" min="1" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                        <span class="font-semibold text-slate-500">/</span>
+                        <input type="number" id="form-max" value="4" min="2" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-form-footer px-6 py-4 border-t border-slate-100 bg-white shrink-0">
+                <button type="submit" class="btn-submit w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all">🚀 发起拼搭</button>
+            </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="auth-modal-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50 opacity-0 invisible transition-all duration-300" id="auth-modal-overlay">
+        <div class="auth-modal-card bg-white rounded-2xl p-8 w-90 max-w-md mx-4 transform scale-90 transition-transform duration-300">
+            <button class="auth-modal-close absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-lg cursor-pointer hover:bg-slate-200 transition-colors" id="auth-modal-close">✕</button>
+            <h2 class="auth-modal-title text-xl font-bold text-center text-slate-800 mb-6">🌍 登录 / 注册</h2>
+            <div class="auth-tabs flex gap-3 mb-5">
+                <button class="auth-tab active flex-1 py-2.5 rounded-lg border border-slate-200 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold cursor-pointer transition-all" id="login-tab" onclick="switchAuthMode(true)">登录</button>
+                <button class="auth-tab flex-1 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold cursor-pointer hover:border-purple-500 transition-all" id="register-tab" onclick="switchAuthMode(false)">注册</button>
+            </div>
+            <form class="auth-form flex flex-col gap-4" id="auth-form">
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">邮箱</label>
+                    <input type="email" id="auth-email" placeholder="输入邮箱" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                </div>
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">密码</label>
+                    <input type="password" id="auth-password" placeholder="输入密码" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                </div>
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">用户名</label>
+                    <input type="text" id="auth-username" placeholder="输入用户名" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                </div>
+                <button type="submit" class="btn-submit w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all mt-2" id="auth-submit">登录</button>
+            </form>
+            <div class="auth-error mt-4 py-3 rounded-lg bg-red-50 text-red-600 text-sm text-center hidden" id="auth-error"></div>
+        </div>
+    </div>
+
+    <div class="detail-modal-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50 opacity-0 invisible transition-all duration-300" id="detail-modal-overlay">
+        <div class="detail-modal-card bg-white rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto transform scale-90 transition-transform duration-300">
+            <button class="detail-modal-close absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-lg cursor-pointer hover:bg-slate-200 transition-colors" id="detail-modal-close">✕</button>
+            
+            <div id="detail-content">
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据库数据导出</title>
+    <style>
+        body { font-family: 'Microsoft YaHei', monospace; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; border-bottom: 2px solid #8B5CF6; padding-bottom: 10px; }
+        h2 { color: #555; margin-top: 20px; font-size: 1.2em; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; overflow-x: auto; max-height: 400px; overflow-y: auto; }
+        button { background: #8B5CF6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; margin: 5px; }
+        button:hover { background: #7c3aed; }
+        .status { color: #8B5CF6; font-weight: bold; margin: 10px 0; }
+        .copy-btn { float: right; background: #10B981; }
+        .copy-btn:hover { background: #059669; }
+        textarea { width: 100%; min-height: 300px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 12px; }
+        .step { background: #f0fdf4; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 4px solid #10B981; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗄️ 数据库数据导出工具</h1>
+        
+        <div class="step">
+            <strong>步骤1：</strong>先在浏览器中打开 <a href="https://kjinvmhqxejplvbvrsug.supabase.co" target="_blank">Supabase控制台</a> 并登录，确保你的浏览器有 Supabase 的登录 session
+        </div>
+        
+        <div class="step">
+            <strong>步骤2：</strong>点击下方按钮导出数据
+        </div>
+        
+        <div class="status" id="status">准备就绪</div>
+        
+        <button onclick="exportAll()">导出全部数据</button>
+        <button onclick="exportTable('planet_users')">导出用户表</button>
+        <button onclick="exportTable('planets_posts')">导出帖子表</button>
+        <button onclick="exportTable('planet_members')">导出成员表</button>
+        <button onclick="exportTable('planet_admins')">导出管理员表</button>
+        
+        <h2>📋 导出结果</h2>
+        <button class="copy-btn" onclick="copyAll()">复制全部</button>
+        <textarea id="output" readonly></textarea>
+        
+        <h2>💡 使用说明</h2>
+        <ol>
+            <li>先登录 Supabase 控制台（确保浏览器有 session）</li>
+            <li>点击"导出全部数据"按钮</li>
+            <li>等待所有数据导出完成</li>
+            <li>点击"复制全部"按钮</li>
+            <li>打开 backup.sql 文件</li>
+            <li>将第8部分的示例数据替换为复制的 INSERT 语句</li>
+            <li>保存文件即可完成完整备份</li>
+        </ol>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://kjinvmhqxejplvbvrsug.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqaW52bWhxeGVqcGx2YnZyc3VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MTE5OTcsImV4cCI6MjA5ODI4Nzk5N30.E664tVoPfwvBVsugcEig7VtMDRy8xVRZZyczFoZUt6w';
+        
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
+        
+        async function exportTable(tableName) {
+            status.textContent = `正在导出 ${tableName} ...`;
+            
+            try {
+                const url = `${SUPABASE_URL}/rest/v1/${tableName}?select=*`;
+                const response = await fetch(url, {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data || data.length === 0) {
+                    appendOutput(`-- ${tableName} 表无数据`);
+                    status.textContent = `${tableName} 导出完成（无数据）`;
+                    return;
+                }
+                
+                const columns = Object.keys(data[0]);
+                const insertStatements = data.map(row => {
+                    const values = columns.map(col => {
+                        const val = row[col];
+                        if (val === null || val === undefined) return 'NULL';
+                        if (typeof val === 'string') {
+                            return `'${val.replace(/'/g, "''")}'`;
+                        }
+                        if (val instanceof Date) {
+                            return `'${val.toISOString()}'`;
+                        }
+                        return val;
+                    });
+                    return `INSERT INTO public.${tableName} (${columns.join(', ')}) VALUES (${values.join(', ')});`;
+                });
+                
+                appendOutput(`-- ==============================================`);
+                appendOutput(`-- ${tableName} 数据`);
+                appendOutput(`-- ==============================================`);
+                appendOutput(insertStatements.join('\n'));
+                appendOutput('');
+                
+                status.textContent = `${tableName} 导出完成（${data.length} 条）`;
+            } catch (err) {
+                status.textContent = `导出失败: ${err.message}`;
+                console.error(err);
+                
+                appendOutput(`-- ❌ ${tableName} 导出失败: ${err.message}`);
+                appendOutput('');
+            }
+        }
+        
+        async function exportAll() {
+            output.value = '';
+            await exportTable('planet_users');
+            await exportTable('planets_posts');
+            await exportTable('planet_members');
+            await exportTable('planet_admins');
+            status.textContent = '全部导出完成！';
+        }
+        
+        function appendOutput(text) {
+            if (output.value) {
+                output.value += '\n' + text;
+            } else {
+                output.value = text;
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function copyAll() {
+            output.select();
+            document.execCommand('copy');
+            alert('已复制到剪贴板！');
+        }
+    </script>
+</body>
+</html>
