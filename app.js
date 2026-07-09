@@ -428,11 +428,9 @@ async function loadData() {
         if (!currentLocation) {
             requestLocation().then(() => {
                 const sort = document.getElementById('sort-select')?.value || 'latest';
-                if (sort === 'distance') {
-                    fetchPosts('', 1, 50, getEffectiveCategory(), sort).then(({ data }) => {
-                        renderCards(data);
-                    });
-                }
+                fetchPosts('', 1, 50, getEffectiveCategory(), sort).then(({ data }) => {
+                    renderCards(data);
+                });
             }).catch(() => {});
         }
         
@@ -468,8 +466,6 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
             filter['type'] = 'eq.game';
             if (currentSubCategory && currentSubCategory !== '全部') {
                 filter['category'] = `eq.${currentSubCategory}`;
-            } else {
-                inFilter['category'] = gameCategories;
             }
         }
         
@@ -495,6 +491,15 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
         
         let filteredData = data || [];
         
+        if (currentLocation) {
+            filteredData = filteredData.map(item => {
+                if (item.lat && item.lng) {
+                    item.distance = getDistance(currentLocation.lat, currentLocation.lng, item.lat, item.lng);
+                }
+                return item;
+            });
+        }
+        
         filteredData.sort((a, b) => {
             const activeStatuses = ['open', 'full'];
             const isActiveA = activeStatuses.includes(a.status);
@@ -508,9 +513,13 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
             }
             
             if (sort === 'distance' && currentLocation) {
-                const distA = a.distance || getDistance(currentLocation.lat, currentLocation.lng, a.lat, a.lng);
-                const distB = b.distance || getDistance(currentLocation.lat, currentLocation.lng, b.lat, b.lng);
-                return distA - distB;
+                return (a.distance || Infinity) - (b.distance || Infinity);
+            }
+            
+            if (sort === 'deadline_soon' || sort === 'deadline_later') {
+                const deadlineA = new Date(a.departure_time || a.game_time || 0).getTime();
+                const deadlineB = new Date(b.departure_time || b.game_time || 0).getTime();
+                return sort === 'deadline_later' ? deadlineB - deadlineA : deadlineA - deadlineB;
             }
             
             const timeA = new Date(a.created_at).getTime();
@@ -783,6 +792,14 @@ async function renderCard(item, memberStatusMap = {}) {
     
     let extraInfo = '';
     
+    const deadlineStr = deadlineTime ? new Date(deadlineTime).toLocaleString('zh-CN', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    }) : null;
+    
+    const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleString('zh-CN', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    }) : null;
+    
     if (type === 'carpool') {
         if (item.departure || item.destination) {
             extraInfo = `
@@ -799,11 +816,8 @@ async function renderCard(item, memberStatusMap = {}) {
                 </div>
             `;
         }
-        if (item.departure_time) {
-            const timeStr = new Date(item.departure_time).toLocaleString('zh-CN', {
-                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-            extraInfo += `<div class="card-time">⏰ ${timeStr}</div>`;
+        if (deadlineStr) {
+            extraInfo += `<div class="card-time">⏰ 出发 ${deadlineStr}</div>`;
         }
     } else if (type === 'food') {
         if (item.product_name) {
@@ -817,22 +831,20 @@ async function renderCard(item, memberStatusMap = {}) {
         if (item.product_location) {
             extraInfo += `<div class="card-location">📍 ${item.product_location}</div>`;
         }
-        if (item.departure_time) {
-            const timeStr = new Date(item.departure_time).toLocaleString('zh-CN', {
-                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-            extraInfo += `<div class="card-time">⏰ 截止 ${timeStr}</div>`;
+        if (deadlineStr) {
+            extraInfo += `<div class="card-time">⏰ 截止 ${deadlineStr}</div>`;
         }
     } else if (type === 'game') {
         if (item.game_location) {
             extraInfo = `<div class="card-location">📍 ${item.game_location}</div>`;
         }
-        if (item.game_time) {
-            const timeStr = new Date(item.game_time).toLocaleString('zh-CN', {
-                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-            extraInfo += `<div class="card-time">⏰ ${timeStr}</div>`;
+        if (deadlineStr) {
+            extraInfo += `<div class="card-time">⏰ 开始 ${deadlineStr}</div>`;
         }
+    }
+    
+    if (createdAtStr) {
+        extraInfo += `<div class="card-created-at">📅 发布于 ${createdAtStr}</div>`;
     }
     
     let distanceInfo = '';
