@@ -36,7 +36,7 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="stat-members">0</div>
-                    <div class="stat-label">成员总数</div>
+                    <div class="stat-label">总参与报名记录</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="stat-pending">0</div>
@@ -121,6 +121,73 @@
             </div>
         </div>
     </main>
+
+    <div class="detail-modal-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50 opacity-0 invisible transition-all duration-300" id="admin-edit-modal-overlay">
+        <div class="detail-modal-card bg-white rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto transform scale-90 transition-transform duration-300">
+            <button class="detail-modal-close absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-lg cursor-pointer hover:bg-slate-200 transition-colors" id="admin-edit-modal-close">✕</button>
+            
+            <div id="admin-edit-content">
+                <h3 class="text-xl font-bold text-center text-slate-800 mb-4">✏️ 管理员编辑</h3>
+                <form id="admin-edit-form">
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">标题</label>
+                        <input type="text" id="admin-edit-title" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">描述</label>
+                        <textarea id="admin-edit-content-text" rows="4" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 resize-none"></textarea>
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">状态</label>
+                        <select id="admin-edit-status" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                            <option value="open">招募中</option>
+                            <option value="full">已满</option>
+                            <option value="completed">已完成</option>
+                            <option value="cancelled">已取消</option>
+                            <option value="expired">已过期</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">当前人数 / 总人数</label>
+                        <div class="form-row flex items-center gap-3">
+                            <input type="number" id="admin-edit-current" min="0" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                            <span class="font-semibold text-slate-500">/</span>
+                            <input type="number" id="admin-edit-max" min="1" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                        </div>
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">出发地</label>
+                        <input type="text" id="admin-edit-departure" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">目的地</label>
+                        <input type="text" id="admin-edit-destination" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">时间</label>
+                        <input type="datetime-local" id="admin-edit-time" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">费用</label>
+                        <input type="number" id="admin-edit-cost" min="0" step="0.01" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">商品名称</label>
+                        <input type="text" id="admin-edit-product-name" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">拼单价</label>
+                        <input type="number" id="admin-edit-product-group-price" min="0" step="0.01" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">活动地点</label>
+                        <input type="text" id="admin-edit-location" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <button type="submit" class="btn-submit w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all mt-4">保存修改</button>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
     <script>
@@ -227,18 +294,23 @@
                     const roleText = isAdmin ? '管理员' : (user.role === 'banned' ? '已封禁' : '居民');
                     const roleClass = isAdmin ? 'role-admin' : (user.role === 'banned' ? 'role-banned' : 'role-citizen');
                     
+                    const roleOptions = isAdmin ? '' : `
+                        <select onchange="updateUserRole('${user.id}', this.value)" class="role-select">
+                            <option value="citizen" ${user.role === 'citizen' ? 'selected' : ''}>居民</option>
+                            <option value="banned" ${user.role === 'banned' ? 'selected' : ''}>已封禁</option>
+                        </select>
+                    `;
+                    
                     return `
                     <tr>
                         <td>${user.id.substring(0, 8)}...</td>
                         <td>${user.email}</td>
                         <td>${user.username || '-'}</td>
-                        <td><span class="role-badge ${roleClass}">${roleText}</span></td>
+                        <td>${roleOptions || `<span class="role-badge ${roleClass}">${roleText}</span>`}</td>
                         <td>${formatDate(user.created_at)}</td>
                         <td>
                             ${!isAdmin ? `
-                                <button class="admin-action-btn ${user.role === 'banned' ? 'btn-unban' : 'btn-ban'}" onclick="toggleUserBan('${user.id}', '${user.role}')">
-                                    ${user.role === 'banned' ? '解除封禁' : '封禁'}
-                                </button>
+                                <button class="admin-action-btn btn-delete" onclick="deleteUser('${user.id}')">删除</button>
                             ` : '<span class="disabled">不可操作</span>'}
                         </td>
                     </tr>
@@ -285,9 +357,10 @@
                         <td>${group.title}</td>
                         <td>${creators[group.creator_id] || '-'}</td>
                         <td><span class="status-badge ${group.status === 'open' ? 'status-active' : 'status-ended'}">${group.status === 'open' ? '进行中' : '已结束'}</span></td>
-                        <td>${(group.current_participants || 0) + 1}/${group.max_participants || 1}</td>
+                        <td>${group.current_participants || 0}/${group.max_participants || 1}</td>
                         <td>${formatDate(group.created_at)}</td>
                         <td>
+                            <button class="admin-action-btn btn-edit" onclick="showAdminEditModal('${group.id}')">编辑</button>
                             <button class="admin-action-btn btn-delete" onclick="deleteGroup('${group.id}')">删除</button>
                         </td>
                     </tr>
@@ -355,27 +428,65 @@
             }
         }
 
-        async function toggleUserBan(userId, currentRole) {
-            if (!confirm(currentRole === 'banned' ? '确定解除该用户封禁？' : '确定封禁该用户？封禁后用户将无法正常使用。')) {
-                return;
-            }
-            
+        async function updateUserRole(userId, newRole) {
             try {
-                const newRole = currentRole === 'banned' ? 'citizen' : 'banned';
                 const { error } = await window.supabaseClient
                     .from('planet_users')
                     .update({ role: newRole })
                     .eq('id', userId);
                 
                 if (error) {
+                    console.error('❌ 更新用户角色失败:', error);
                     alert('操作失败：' + error.message);
+                    await loadUsersList();
+                }
+            } catch (error) {
+                console.error('❌ 更新用户角色异常:', error);
+                alert('操作失败：' + error.message);
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('确定删除该用户？此操作将同时删除所有相关记录，且无法撤销。')) {
+                return;
+            }
+            
+            try {
+                const { error: deleteMembersError } = await window.supabaseClient
+                    .from('planet_members')
+                    .delete()
+                    .eq('user_id', userId);
+                
+                if (deleteMembersError) {
+                    alert('删除成员记录失败：' + deleteMembersError.message);
+                    return;
+                }
+                
+                const { error: deletePostsError } = await window.supabaseClient
+                    .from('planets_posts')
+                    .delete()
+                    .eq('creator_id', userId);
+                
+                if (deletePostsError) {
+                    alert('删除用户发布的拼搭失败：' + deletePostsError.message);
+                    return;
+                }
+                
+                const { error } = await window.supabaseClient
+                    .from('planet_users')
+                    .delete()
+                    .eq('id', userId);
+                
+                if (error) {
+                    alert('删除用户失败：' + error.message);
                     return;
                 }
                 
                 await loadUsersList();
+                await loadGroupsList();
                 await loadDashboardStats();
             } catch (error) {
-                console.error('❌ 封禁操作失败:', error);
+                console.error('❌ 删除用户失败:', error);
                 alert('操作失败：' + error.message);
             }
         }

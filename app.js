@@ -103,6 +103,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+let authTokenCache = null;
+let authTokenExpiry = 0;
+
+async function getAuthToken() {
+    const now = Date.now();
+    if (authTokenCache && now < authTokenExpiry) {
+        return authTokenCache;
+    }
+    
+    if (window.userAccessToken) {
+        authTokenCache = window.userAccessToken;
+        authTokenExpiry = now + 300000;
+        return authTokenCache;
+    }
+    
+    if (window.supabaseClient) {
+        try {
+            const sessionResult = await window.supabaseClient.auth.getSession();
+            if (sessionResult.data.session?.access_token) {
+                authTokenCache = sessionResult.data.session.access_token;
+                window.userAccessToken = authTokenCache;
+                authTokenExpiry = now + 300000;
+                return authTokenCache;
+            }
+        } catch (e) {
+            console.warn('⚠️ 获取 session 失败，使用 anon key:', e.message);
+        }
+    }
+    
+    authTokenCache = SUPABASE_KEY;
+    authTokenExpiry = now + 300000;
+    return authTokenCache;
+}
+
 async function supabaseFetch(table, options = {}) {
     const {
         select = '*',
@@ -149,23 +183,7 @@ async function supabaseFetch(table, options = {}) {
     }
     
     try {
-        let authToken = SUPABASE_KEY;
-        
-        if ((method !== 'GET' || useAuthToken)) {
-            if (window.userAccessToken) {
-                authToken = window.userAccessToken;
-            } else if (window.supabaseClient) {
-                try {
-                    const sessionResult = await window.supabaseClient.auth.getSession();
-                    if (sessionResult.data.session?.access_token) {
-                        authToken = sessionResult.data.session.access_token;
-                        window.userAccessToken = authToken;
-                    }
-                } catch (e) {
-                    console.warn('⚠️ 获取 session 失败，使用 anon key:', e.message);
-                }
-            }
-        }
+        const authToken = await getAuthToken();
         
         const headers = {
             'apikey': SUPABASE_KEY,
@@ -176,7 +194,6 @@ async function supabaseFetch(table, options = {}) {
         if (method !== 'GET') {
             if (upsert) {
                 headers['Prefer'] = 'return=representation,resolution=merge-duplicates';
-                console.log('🔄 使用 Upsert 模式');
             } else {
                 headers['Prefer'] = 'return=representation';
             }
@@ -189,8 +206,6 @@ async function supabaseFetch(table, options = {}) {
         });
         
         const data = await response.json();
-        
-        console.log('📋 supabaseFetch 响应:', response.status, response.ok, data);
         
         if (response.status >= 400) {
             console.error('❌ supabaseFetch 失败:', response.status, data);
@@ -215,8 +230,6 @@ async function supabaseFetch(table, options = {}) {
 }
 
 async function testNetworkConnection() {
-    console.log('🔍 测试1: 原始 fetch 请求到 Supabase REST API...');
-    
     try {
         const response = await fetch(
             `${SUPABASE_URL}/rest/v1/planets_posts?select=id&limit=1`,
@@ -227,27 +240,9 @@ async function testNetworkConnection() {
                 }
             }
         );
-        
-        const data = await response.json();
-        console.log('✅ 原始 fetch 请求成功:', data);
-        console.log('📋 HTTP 状态码:', response.status);
-        
-        if (response.status === 200 && Array.isArray(data)) {
-            console.log('✅ Supabase REST API 可访问');
-        } else {
-            console.error('❌ Supabase REST API 返回异常:', data);
-        }
+        return response.ok;
     } catch (error) {
-        console.error('❌ 原始 fetch 请求失败:', error);
-        console.error('❌ 这可能是 Edge 跟踪防护阻止了请求');
-        console.log('💡 建议：在 Edge 设置中添加 localhost 到跟踪防护例外列表');
-    }
-    
-    console.log('🔍 测试2: 检查网络状态...');
-    if (navigator.onLine) {
-        console.log('✅ 网络连接正常');
-    } else {
-        console.error('❌ 网络断开连接');
+        return false;
     }
 }
 
@@ -333,69 +328,8 @@ function formatDistance(km) {
     return km.toFixed(1) + 'km';
 }
 
-const AMAP_KEY = '您的高德地图API Key';
-
 async function reverseGeocode(lat, lng) {
-    if (!AMAP_KEY || AMAP_KEY === '您的高德地图API Key') {
-        console.warn('⚠️ 未配置高德地图API Key，跳过反向地理编码');
-        return null;
-    }
-    
-    try {
-        const response = await fetch(
-            `https://restapi.amap.com/v3/geocode/regeo?key=${AMAP_KEY}&location=${lng},${lat}&radius=1000&extensions=all`
-        );
-        
-        if (!response.ok) {
-            console.warn('⚠️ 高德地图反向地理编码失败:', response.status);
-            return tryGeoNamesReverseGeocode(lat, lng);
-        }
-        
-        const data = await response.json();
-        
-        if (data.status === '1' && data.regeocode && data.regeocode.formatted_address) {
-            const formatted = data.regeocode.formatted_address;
-            const city = data.regeocode.addressComponent?.city || '';
-            const district = data.regeocode.addressComponent?.district || '';
-            
-            if (city && district) {
-                return `${city} ${district}`;
-            }
-            return formatted.substring(0, 30);
-        }
-        
-        return tryGeoNamesReverseGeocode(lat, lng);
-    } catch (error) {
-        console.warn('⚠️ 高德地图反向地理编码异常:', error);
-        return tryGeoNamesReverseGeocode(lat, lng);
-    }
-}
-
-async function tryGeoNamesReverseGeocode(lat, lng) {
-    try {
-        const response = await fetch(
-            `http://api.geonames.org/findNearbyPlaceNameJSON?lat=${lat}&lng=${lng}&username=demo`
-        );
-        
-        if (!response.ok) {
-            return null;
-        }
-        
-        const data = await response.json();
-        
-        if (data.geonames && data.geonames.length > 0) {
-            const place = data.geonames[0];
-            const parts = [];
-            if (place.adminName1) parts.push(place.adminName1);
-            if (place.name) parts.push(place.name);
-            return parts.join(' ') || place.name;
-        }
-        
-        return null;
-    } catch (error) {
-        console.warn('⚠️ GeoNames反向地理编码异常:', error);
-        return null;
-    }
+    return null;
 }
 
 async function requestLocation() {
@@ -426,9 +360,9 @@ async function requestLocation() {
                 reject(error);
             },
             {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 60000
+                enableHighAccuracy: false,
+                timeout: 3000,
+                maximumAge: 300000
             }
         );
     });
@@ -494,9 +428,11 @@ async function loadData() {
         if (!currentLocation) {
             requestLocation().then(() => {
                 const sort = document.getElementById('sort-select')?.value || 'latest';
-                fetchPosts('', 1, 50, getEffectiveCategory(), sort).then(({ data }) => {
-                    renderCards(data);
-                });
+                if (sort === 'distance') {
+                    fetchPosts('', 1, 50, getEffectiveCategory(), sort).then(({ data }) => {
+                        renderCards(data);
+                    });
+                }
             }).catch(() => {});
         }
         
@@ -537,12 +473,6 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
             }
         }
         
-        if (searchCategory && searchCategory !== '') {
-            if (!filter['type']) {
-                filter['type'] = `eq.${searchCategory}`;
-            }
-        }
-        
         if (keyword && keyword.trim()) {
             const searchTerm = keyword.trim().toLowerCase();
             filter['or'] = `(title.ilike.%${searchTerm}%,content.ilike.%${searchTerm}%,departure.ilike.%${searchTerm}%,destination.ilike.%${searchTerm}%,product_name.ilike.%${searchTerm}%,product_location.ilike.%${searchTerm}%,game_type.ilike.%${searchTerm}%,game_location.ilike.%${searchTerm}%,location_name.ilike.%${searchTerm}%)`;
@@ -565,23 +495,28 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
         
         let filteredData = data || [];
         
-        if (sort === 'distance') {
-            if (currentLocation) {
-                filteredData = filteredData
-                    .filter(item => item.lat && item.lng)
-                    .map(item => ({
-                        ...item,
-                        distance: getDistance(currentLocation.lat, currentLocation.lng, item.lat, item.lng)
-                    }))
-                    .sort((a, b) => a.distance - b.distance);
-            } else {
-                filteredData = filteredData.sort((a, b) => {
-                    const timeA = new Date(a.created_at).getTime();
-                    const timeB = new Date(b.created_at).getTime();
-                    return timeB - timeA;
-                });
+        filteredData.sort((a, b) => {
+            const activeStatuses = ['open', 'full'];
+            const isActiveA = activeStatuses.includes(a.status);
+            const isActiveB = activeStatuses.includes(b.status);
+            
+            if (isActiveA && !isActiveB) {
+                return -1;
             }
-        }
+            if (!isActiveA && isActiveB) {
+                return 1;
+            }
+            
+            if (sort === 'distance' && currentLocation) {
+                const distA = a.distance || getDistance(currentLocation.lat, currentLocation.lng, a.lat, a.lng);
+                const distB = b.distance || getDistance(currentLocation.lat, currentLocation.lng, b.lat, b.lng);
+                return distA - distB;
+            }
+            
+            const timeA = new Date(a.created_at).getTime();
+            const timeB = new Date(b.created_at).getTime();
+            return sort === 'oldest' ? timeA - timeB : timeB - timeA;
+        });
         
         return { data: filteredData, count: filteredData.length };
         
@@ -591,39 +526,57 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
     }
 }
 
+let searchTimeout = null;
+let sortTimeout = null;
+
+function debounceSearch() {
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async () => {
+        const keyword = document.getElementById('search-input')?.value || '';
+        const sort = document.getElementById('sort-select')?.value || 'latest';
+        const searchCategory = document.getElementById('search-category')?.value || '';
+        
+        showSkeleton();
+        
+        const tabs = document.querySelectorAll('.category-tab');
+        
+        if (keyword.trim()) {
+            tabs.forEach(tab => tab.classList.remove('active'));
+        } else if (!searchCategory) {
+            const activeTab = tabs[0];
+            if (activeTab) activeTab.classList.add('active');
+            currentMainCategory = 'carpool';
+        }
+        
+        const effectiveType = searchCategory || getEffectiveCategory();
+        const { data } = await fetchPosts(keyword, 1, 50, effectiveType, sort, '');
+        hideSkeleton();
+        await renderCards(data);
+    }, 300);
+}
+
+function debounceSort() {
+    if (sortTimeout) clearTimeout(sortTimeout);
+    sortTimeout = setTimeout(async () => {
+        const keyword = document.getElementById('search-input')?.value || '';
+        const sort = document.getElementById('sort-select')?.value || 'latest';
+        const searchCategory = document.getElementById('search-category')?.value || '';
+        
+        showSkeleton();
+        
+        const effectiveType = searchCategory || getEffectiveCategory();
+        const { data } = await fetchPosts(keyword, 1, 50, effectiveType, sort, '');
+        hideSkeleton();
+        await renderCards(data);
+    }, 300);
+}
+
 async function handleSearch() {
-    const keyword = document.getElementById('search-input')?.value || '';
-    const sort = document.getElementById('sort-select')?.value || 'latest';
-    const searchCategory = document.getElementById('search-category')?.value || '';
-    
-    showSkeleton();
-    Object.keys(requestCache).forEach(key => delete requestCache[key]);
-    
-    const tabs = document.querySelectorAll('.category-tab');
-    
-    if (keyword.trim()) {
-        tabs.forEach(tab => tab.classList.remove('active'));
-    } else if (!searchCategory) {
-        const activeTab = tabs[0];
-        if (activeTab) activeTab.classList.add('active');
-        currentMainCategory = 'carpool';
-    }
-    
-    const { data } = await fetchPosts(keyword, 1, 50, searchCategory, sort, '');
-    hideSkeleton();
-    await renderCards(data);
+    debounceSearch();
 }
 
 async function handleSort() {
-    const keyword = document.getElementById('search-input')?.value || '';
-    const sort = document.getElementById('sort-select')?.value || 'latest';
-    const searchCategory = document.getElementById('search-category')?.value || '';
-    
-    showSkeleton();
-    Object.keys(requestCache).forEach(key => delete requestCache[key]);
-    const { data } = await fetchPosts(keyword, 1, 50, searchCategory, sort, '');
-    hideSkeleton();
-    await renderCards(data);
+    debounceSort();
 }
 
 function showSkeleton() {
@@ -642,6 +595,8 @@ function showSkeleton() {
 
 function hideSkeleton() {
 }
+
+const creatorCache = {};
 
 async function renderCards(data) {
     const container = document.getElementById('cards-container');
@@ -672,6 +627,20 @@ async function renderCards(data) {
             }, {});
         }
         
+        const creatorIds = [...new Set(data.map(item => item.creator_id))];
+        const missingCreatorIds = creatorIds.filter(id => !creatorCache[id]);
+        
+        if (missingCreatorIds.length > 0 && window.supabaseClient) {
+            const { data: creatorData } = await window.supabaseClient
+                .from('planet_users')
+                .select('id, username, avatar_url')
+                .in('id', missingCreatorIds);
+            
+            (creatorData || []).forEach(c => {
+                creatorCache[c.id] = { username: c.username, avatar_url: c.avatar_url };
+            });
+        }
+        
         const cardHtml = await Promise.all(data.map(item => renderCard(item, memberStatusMap)));
         container.innerHTML = cardHtml.join('');
         
@@ -697,11 +666,32 @@ function bindCardClickEvents() {
     });
 }
 
+function getParticipantCount(post) {
+    if (!post) return 0;
+    
+    let count = parseInt(post.current_participants);
+    if (isNaN(count) || count < 0) {
+        count = 0;
+    }
+    
+    return count;
+}
+
+function getMaxParticipantCount(post) {
+    if (!post) return 10;
+    
+    let count = parseInt(post.max_participants);
+    if (isNaN(count) || count < 1) {
+        count = 10;
+    }
+    
+    return count;
+}
+
 async function renderCard(item, memberStatusMap = {}) {
     try {
-        const maxMembers = item.max_participants || 10;
-        const actualMembers = item.current_participants || 0;
-        const currentMembers = actualMembers + 1;
+        const maxMembers = getMaxParticipantCount(item);
+        const currentMembers = getParticipantCount(item);
         const progress = Math.min((currentMembers / maxMembers) * 100, 100);
         const isFull = currentMembers >= maxMembers;
         const isCreator = window.currentUser && item.creator_id === window.currentUser.id;
@@ -737,12 +727,16 @@ async function renderCard(item, memberStatusMap = {}) {
             joinButton = '<button class="join-btn btn-disabled">✅ 已加入</button>';
         } else if (memberStatus === 'rejected') {
             joinButton = '<button class="join-btn btn-disabled">❌ 已拒绝</button>';
+        } else if (item.status === 'completed') {
+            joinButton = '<button class="join-btn btn-disabled">已完成</button>';
+        } else if (item.status === 'cancelled') {
+            joinButton = '<button class="join-btn btn-disabled">已取消</button>';
         } else if (isExpired) {
             joinButton = '<button class="join-btn btn-disabled">已过期</button>';
         } else if (isFull) {
             joinButton = '<button class="join-btn btn-disabled">已满</button>';
         } else {
-            joinButton = `<button class="join-btn" onclick="joinGroup('${item.id}', '${item.creator_id}', ${currentMembers}, ${maxMembers})">申请加入</button>`;
+            joinButton = `<button class="join-btn" onclick="showJoinModal('${item.id}', '${item.creator_id}', ${currentMembers}, ${maxMembers})">申请加入</button>`;
         }
     }
     
@@ -881,6 +875,14 @@ async function renderCard(item, memberStatusMap = {}) {
                 </div>
                 ${statusInfo.text ? `<div class="card-status ${statusInfo.class}">${statusInfo.text}</div>` : ''}
             </div>
+            <div class="card-creator-tag">👤 发起人</div>
+            ${(() => {
+                const creator = creatorCache[item.creator_id];
+                if (creator && creator.username) {
+                    return `<div class="card-creator-name">${creator.username}</div>`;
+                }
+                return '';
+            })()}
             ${distanceInfo}
             ${extraInfo}
             <p class="card-content">${item.content || '暂无描述'}</p>
@@ -888,7 +890,7 @@ async function renderCard(item, memberStatusMap = {}) {
                 <div class="progress-fill" style="width: ${progress}%"></div>
             </div>
             <div class="card-footer">
-                <div class="card-participants">${currentMembers}/${maxMembers} 人</div>
+                <div class="card-participants">已参与: ${currentMembers} / ${maxMembers}</div>
                 ${joinButton}
             </div>
         </div>
@@ -1021,9 +1023,8 @@ async function showPostDetail(postId) {
         const filteredMemberIds = memberUserIds.filter(id => id !== creatorId);
         const memberInfos = await Promise.all(filteredMemberIds.map(fetchUserInfo));
         
-        const maxMembers = post.max_participants || 10;
-        const actualMembers = post.current_participants || 0;
-        const currentMembers = actualMembers + 1;
+        const maxMembers = getMaxParticipantCount(post);
+        const currentMembers = getParticipantCount(post);
         const isFull = currentMembers >= maxMembers;
         
         const deadlineTime = post.departure_time || post.game_time || null;
@@ -1069,7 +1070,7 @@ async function showPostDetail(postId) {
         } else if (isFull || post.status === 'full') {
             joinButton = '<button class="join-btn btn-disabled">已满</button>';
         } else {
-            joinButton = `<button class="join-btn" onclick="joinGroup('${post.id}', '${creatorId}', ${currentMembers}, ${maxMembers}); closeDetailModal();">申请加入</button>`;
+            joinButton = `<button class="join-btn" onclick="showJoinModal('${post.id}', '${creatorId}', ${currentMembers}, ${maxMembers}); closeDetailModal();">申请加入</button>`;
         }
         
         const typeNames = {
@@ -1127,12 +1128,16 @@ async function showPostDetail(postId) {
             </div>
         `).join('');
         
+        const isAdmin = window.currentUser?.role === 'admin';
+        const adminEditBtn = isAdmin ? `<button class="admin-edit-btn" onclick="showAdminEditModal('${post.id}')">✏️ 管理员编辑</button>` : '';
+        
         content.innerHTML = `
             <div class="detail-header">
                 <span class="detail-category ${post.type || 'game'}">${typeNames[post.type] || '拼搭'}</span>
                 <h2 class="detail-title">${post.title}</h2>
                 <div class="detail-meta">
-                    <span class="detail-meta-item">👥 ${currentMembers}/${maxMembers} 人</span>
+                    <span class="detail-meta-item">👤 发起人</span>
+                    <span class="detail-meta-item">👥 已参与: ${currentMembers} / ${maxMembers}</span>
                     <span class="detail-meta-item">📅 ${new Date(post.created_at).toLocaleDateString('zh-CN')}</span>
                     ${post.location_name ? `<span class="detail-meta-item">📍 ${post.location_name}</span>` : ''}
                 </div>
@@ -1158,6 +1163,7 @@ async function showPostDetail(postId) {
             ` : ''}
             
             <div class="detail-footer">
+                ${adminEditBtn}
                 ${joinButton}
             </div>
         `;
@@ -1170,7 +1176,9 @@ async function showPostDetail(postId) {
 
 function closeDetailModal() {
     const overlay = document.getElementById('detail-modal-overlay');
-    overlay.classList.remove('active');
+    if (overlay) {
+        overlay.classList.remove('active');
+    }
 }
 
 function viewUserProfile(userId) {
@@ -1208,8 +1216,206 @@ function initDetailModal() {
     }
 }
 
-async function joinGroup(groupId, creatorId, currentMembers, maxMembers) {
-    console.log('👥 joinGroup:', groupId, creatorId, currentMembers, maxMembers);
+let joinGroupData = null;
+
+function showJoinModal(groupId, creatorId, currentMembers, maxMembers) {
+    joinGroupData = { groupId, creatorId, currentMembers, maxMembers };
+    
+    const joinCountInput = document.getElementById('join-count');
+    const joinRemaining = document.getElementById('join-remaining');
+    
+    const maxJoin = maxMembers - currentMembers;
+    joinCountInput.max = maxJoin;
+    joinCountInput.value = Math.min(1, maxJoin);
+    joinCountInput.min = 1;
+    
+    joinRemaining.textContent = `当前已参与 ${currentMembers} 人，还剩 ${maxJoin} 个名额`;
+    
+    joinCountInput.addEventListener('input', function() {
+        const val = parseInt(this.value);
+        if (val > maxJoin) {
+            this.value = maxJoin;
+        }
+        joinRemaining.textContent = `当前已参与 ${currentMembers} 人，选择加入 ${val} 人，还剩 ${maxJoin - val} 个名额`;
+    });
+    
+    const overlay = document.getElementById('join-modal-overlay');
+    const card = overlay.querySelector('.detail-modal-card');
+    
+    overlay.classList.remove('opacity-0', 'invisible');
+    card.classList.remove('scale-90');
+    card.classList.add('scale-100');
+    
+    document.getElementById('join-modal-close').onclick = closeJoinModal;
+}
+
+function closeJoinModal() {
+    const overlay = document.getElementById('join-modal-overlay');
+    const card = overlay.querySelector('.detail-modal-card');
+    
+    overlay.classList.add('opacity-0', 'invisible');
+    card.classList.remove('scale-100');
+    card.classList.add('scale-90');
+    joinGroupData = null;
+}
+
+let editingPostId = null;
+
+async function showAdminEditModal(postId) {
+    editingPostId = postId;
+    
+    try {
+        const { data: postData, error } = await window.supabaseClient
+            .from('planets_posts')
+            .select('*')
+            .eq('id', postId)
+            .limit(1);
+        
+        if (error || !postData || postData.length === 0) {
+            alert('获取帖子信息失败');
+            return;
+        }
+        
+        const post = postData[0];
+        
+        document.getElementById('admin-edit-title').value = post.title || '';
+        document.getElementById('admin-edit-content-text').value = post.content || '';
+        document.getElementById('admin-edit-status').value = post.status || 'open';
+        document.getElementById('admin-edit-current').value = post.current_participants || 1;
+        document.getElementById('admin-edit-max').value = post.max_participants || 4;
+        document.getElementById('admin-edit-departure').value = post.departure || '';
+        document.getElementById('admin-edit-destination').value = post.destination || '';
+        
+        const timeValue = post.departure_time || post.game_time;
+        if (timeValue) {
+            const date = new Date(timeValue);
+            document.getElementById('admin-edit-time').value = date.toISOString().slice(0, 16);
+        } else {
+            document.getElementById('admin-edit-time').value = '';
+        }
+        
+        document.getElementById('admin-edit-cost').value = post.cost || '';
+        document.getElementById('admin-edit-product-name').value = post.product_name || '';
+        document.getElementById('admin-edit-product-group-price').value = post.product_group_price || '';
+        document.getElementById('admin-edit-location').value = post.game_location || post.product_location || post.location_name || '';
+        
+        const overlay = document.getElementById('admin-edit-modal-overlay');
+        const card = overlay.querySelector('.detail-modal-card');
+        
+        overlay.classList.remove('opacity-0', 'invisible');
+        card.classList.remove('scale-90');
+        card.classList.add('scale-100');
+        
+        document.getElementById('admin-edit-modal-close').onclick = closeAdminEditModal;
+        
+        document.getElementById('admin-edit-form').onsubmit = async function(e) {
+            e.preventDefault();
+            await submitAdminEdit();
+        };
+        
+    } catch (error) {
+        console.error('❌ 加载编辑信息失败:', error);
+        alert('加载编辑信息失败');
+    }
+}
+
+function closeAdminEditModal() {
+    const overlay = document.getElementById('admin-edit-modal-overlay');
+    if (!overlay) {
+        editingPostId = null;
+        return;
+    }
+    const card = overlay.querySelector('.detail-modal-card');
+    
+    overlay.classList.add('opacity-0', 'invisible');
+    if (card) {
+        card.classList.remove('scale-100');
+        card.classList.add('scale-90');
+    }
+    editingPostId = null;
+}
+
+async function submitAdminEdit() {
+    if (!editingPostId) return;
+    
+    const title = document.getElementById('admin-edit-title').value;
+    const content = document.getElementById('admin-edit-content-text').value;
+    const status = document.getElementById('admin-edit-status').value;
+    const currentParticipants = parseInt(document.getElementById('admin-edit-current').value);
+    const maxParticipants = parseInt(document.getElementById('admin-edit-max').value);
+    const departure = document.getElementById('admin-edit-departure').value;
+    const destination = document.getElementById('admin-edit-destination').value;
+    const timeValue = document.getElementById('admin-edit-time').value;
+    const cost = parseFloat(document.getElementById('admin-edit-cost').value);
+    const productName = document.getElementById('admin-edit-product-name').value;
+    const productGroupPrice = parseFloat(document.getElementById('admin-edit-product-group-price').value);
+    const location = document.getElementById('admin-edit-location').value;
+    
+    if (!title) {
+        alert('请填写标题');
+        return;
+    }
+    
+    const updateData = {
+        title,
+        content,
+        status,
+        current_participants: currentParticipants,
+        max_participants: maxParticipants
+    };
+    
+    if (departure) updateData.departure = departure;
+    if (destination) updateData.destination = destination;
+    if (timeValue) {
+        updateData.departure_time = new Date(timeValue).toISOString();
+        updateData.game_time = new Date(timeValue).toISOString();
+    }
+    if (!isNaN(cost)) updateData.cost = cost;
+    if (productName) updateData.product_name = productName;
+    if (!isNaN(productGroupPrice)) updateData.product_group_price = productGroupPrice;
+    if (location) {
+        updateData.game_location = location;
+        updateData.product_location = location;
+        updateData.location_name = location;
+    }
+    
+    try {
+        const { error } = await window.supabaseClient
+            .from('planets_posts')
+            .update(updateData)
+            .eq('id', editingPostId);
+        
+        if (error) {
+            console.error('❌ 管理员编辑失败:', error);
+            alert('编辑失败：' + error.message);
+            return;
+        }
+        
+        alert('✅ 修改成功！');
+        closeAdminEditModal();
+        closeDetailModal();
+        await loadData();
+        
+        if (window.location.pathname.includes('admin')) {
+            if (typeof loadGroupsList === 'function') {
+                await loadGroupsList();
+            }
+            if (typeof loadDashboardStats === 'function') {
+                await loadDashboardStats();
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ 管理员编辑异常:', error);
+        alert('编辑失败：' + error.message);
+    }
+}
+
+async function submitJoinRequest() {
+    if (!joinGroupData) return;
+    
+    const { groupId, creatorId, currentMembers, maxMembers } = joinGroupData;
+    const joinCount = parseInt(document.getElementById('join-count').value) || 1;
     
     if (!window.currentUser) {
         alert('请先登录！');
@@ -1252,7 +1458,8 @@ async function joinGroup(groupId, creatorId, currentMembers, maxMembers) {
                 group_id: groupId,
                 user_id: window.currentUser.id,
                 status: 'pending',
-                joined_at: new Date().toISOString()
+                joined_at: new Date().toISOString(),
+                party_size: joinCount
             }]);
         
         if (insertError) {
@@ -1261,6 +1468,7 @@ async function joinGroup(groupId, creatorId, currentMembers, maxMembers) {
         }
         
         alert('📝 申请已提交，请等待发起人审核');
+        closeJoinModal();
         await loadData();
         
         if (window.location.pathname.includes('profile')) {
@@ -1675,8 +1883,7 @@ function renderPostList(posts, isCreator, showMemberStatus = false) {
         const isExpired = deadlineTime ? (new Date() > new Date(deadlineTime)) : false;
         
         const maxMembers = item.max_participants || 10;
-        const actualMembers = item.current_participants || 0;
-        const currentMembers = actualMembers + 1;
+        const currentMembers = item.current_participants || 0;
         const isActuallyFull = currentMembers >= maxMembers;
         
         let statusInfo;
@@ -1732,7 +1939,7 @@ function renderPostList(posts, isCreator, showMemberStatus = false) {
                         </div>
                         <p style="font-size: 0.875rem; color: #64748b; margin-bottom: 8px;">${item.content}</p>
                         <div style="display: flex; align-items: center; gap: 16px; font-size: 0.875rem; color: #64748b;">
-                            <span>👥 ${currentMembers}/${maxMembers}</span>
+                            <span>👥 已参与: ${currentMembers} / ${maxMembers}</span>
                             ${item.location_name ? `<span>📍 ${item.location_name}</span>` : ''}
                             ${item.created_at ? `<span>📅 ${new Date(item.created_at).toLocaleDateString()}</span>` : ''}
                         </div>
@@ -2336,8 +2543,14 @@ function initForm() {
         });
     }
     
+    let isSubmitting = false;
+
     createForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        
+        if (isSubmitting) {
+            return;
+        }
         
         if (!window.currentUser) {
             alert('请先登录！');
@@ -2347,13 +2560,23 @@ function initForm() {
         const type = document.getElementById('form-type').value;
         const title = document.getElementById('form-title').value;
         const content = document.getElementById('form-content').value;
-        const currentParticipants = parseInt(document.getElementById('form-current').value) || 0;
+        const partySize = parseInt(document.getElementById('form-current').value) || 1;
         const maxParticipants = parseInt(document.getElementById('form-max').value) || 4;
         
         if (!type || !title || !content) {
             alert('请填写完整信息！');
             return;
         }
+        
+        if (partySize >= maxParticipants) {
+            alert('携带人数不能大于总人数！');
+            return;
+        }
+        
+        isSubmitting = true;
+        const submitBtn = createForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn?.textContent || '发布';
+        if (submitBtn) submitBtn.textContent = '发布中...';
         
         const locationName = document.getElementById('form-location').value;
         const lat = document.getElementById('form-lat').value ? parseFloat(document.getElementById('form-lat').value) : null;
@@ -2364,8 +2587,8 @@ function initForm() {
             content,
             type,
             category: '',
-            status: currentParticipants >= maxParticipants ? 'full' : 'open',
-            current_participants: currentParticipants,
+            status: partySize >= maxParticipants ? 'full' : 'open',
+            current_participants: 0,
             max_participants: maxParticipants,
             creator_id: window.currentUser.id,
             created_at: new Date().toISOString(),
@@ -2423,11 +2646,14 @@ function initForm() {
                     .insert([{
                         group_id: postId,
                         user_id: window.currentUser.id,
-                        status: 'approved'
+                        status: 'approved',
+                        party_size: partySize
                     }]);
                 
                 if (memberError) {
                     console.warn('⚠️ 创建发起人成员记录失败:', memberError);
+                } else {
+                    console.log('✅ 发起人成员记录创建完成，party_size:', partySize);
                 }
                 
                 console.log('✅ 关联表记录创建完成');
@@ -2447,6 +2673,9 @@ function initForm() {
         } catch (error) {
             console.error('❌ 创建拼搭异常:', error);
             alert('创建失败：' + error.message);
+        } finally {
+            isSubmitting = false;
+            if (submitBtn) submitBtn.textContent = originalText;
         }
     });
     
@@ -2880,7 +3109,7 @@ function fillUserInfo(user) {
     
     const displayName = user.username || user.nickname || user.email?.split('@')[0] || '用户';
     
-    const effectiveRole = window.currentUser?.role === 'admin' ? 'admin' : user.role;
+    const effectiveRole = user.role;
     
     const genderMap = {
         'male': '👨 男',
@@ -3180,6 +3409,15 @@ async function approveRequest(groupId, userId) {
     console.log('✅ approveRequest:', groupId, userId);
     
     try {
+        const { data: memberData, error: memberError } = await window.supabaseClient
+            .from('planet_members')
+            .select('party_size')
+            .eq('group_id', groupId)
+            .eq('user_id', userId)
+            .limit(1);
+        
+        const joinCount = memberData && memberData.length > 0 ? (memberData[0].party_size || 1) : 1;
+        
         const { error: updateError } = await supabaseFetch('planet_members', {
             method: 'PATCH',
             body: {
@@ -3206,13 +3444,11 @@ async function approveRequest(groupId, userId) {
         if (!postError && postData && postData.length > 0) {
             const current = postData[0].current_participants || 0;
             const max = postData[0].max_participants || 4;
-            const newCurrent = current + 1;
-            const newStatus = newCurrent >= max ? 'full' : 'open';
+            const newStatus = current >= max ? 'full' : 'open';
             
             await window.supabaseClient
                 .from('planets_posts')
                 .update({
-                    current_participants: newCurrent,
                     status: newStatus
                 })
                 .eq('id', groupId);

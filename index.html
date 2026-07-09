@@ -15,17 +15,17 @@
         }
         
         function loadSupabaseFallback() {
-            console.warn('⚠️ 主 CDN 加载失败，尝试备用 CDN...');
+            console.warn('⚠️ 本地 SDK 加载失败，尝试 CDN...');
             var script = document.createElement('script');
-            script.src = 'https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
+            script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
             script.onload = onSupabaseLoaded;
             script.onerror = function() {
-                console.error('❌ 备用 CDN 也加载失败，请检查网络连接');
+                console.error('❌ CDN 也加载失败，请检查网络连接');
             };
             document.head.appendChild(script);
         }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" onload="onSupabaseLoaded()" onerror="loadSupabaseFallback()"></script>
+    <script src="supabase.min.js" onload="onSupabaseLoaded()" onerror="loadSupabaseFallback()"></script>
 </head>
 <body>
     <div class="app-container min-h-screen flex flex-col bg-slate-50">
@@ -288,12 +288,13 @@
                 </div>
 
                 <div class="form-group flex flex-col gap-2">
-                    <label class="text-sm font-semibold text-slate-700">人数限制</label>
+                    <label class="text-sm font-semibold text-slate-700">携带人数 / 总人数</label>
                     <div class="form-row flex items-center gap-3">
-                        <input type="number" id="form-current" value="1" min="1" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                        <input type="number" id="form-current" value="1" min="1" max="10" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" placeholder="您携带的人数">
                         <span class="font-semibold text-slate-500">/</span>
-                        <input type="number" id="form-max" value="4" min="2" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                        <input type="number" id="form-max" value="4" min="2" max="50" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100" placeholder="总人数上限">
                     </div>
+                    <p class="text-xs text-slate-400">发起人可以选择自己这边有多少人参与</p>
                 </div>
             </div>
             <div class="modal-form-footer px-6 py-4 border-t border-slate-100 bg-white shrink-0">
@@ -335,6 +336,90 @@
             <button class="detail-modal-close absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-lg cursor-pointer hover:bg-slate-200 transition-colors" id="detail-modal-close">✕</button>
             
             <div id="detail-content">
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-modal-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50 opacity-0 invisible transition-all duration-300" id="join-modal-overlay">
+        <div class="detail-modal-card bg-white rounded-2xl p-6 w-full max-w-md mx-4 transform scale-90 transition-transform duration-300">
+            <button class="detail-modal-close absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-lg cursor-pointer hover:bg-slate-200 transition-colors" id="join-modal-close">✕</button>
+            
+            <div id="join-content">
+                <h3 class="text-xl font-bold text-center text-slate-800 mb-4">👥 申请加入</h3>
+                <div class="form-group flex flex-col gap-2">
+                    <label class="text-sm font-semibold text-slate-700">您要加入的人数</label>
+                    <input type="number" id="join-count" value="1" min="1" max="10" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    <p class="text-xs text-slate-400">请选择您这边参与的人数</p>
+                </div>
+                <div id="join-remaining" class="text-sm text-slate-500 mb-4"></div>
+                <button class="btn-submit w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all" onclick="submitJoinRequest()">确认申请</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-modal-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50 opacity-0 invisible transition-all duration-300" id="admin-edit-modal-overlay">
+        <div class="detail-modal-card bg-white rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto transform scale-90 transition-transform duration-300">
+            <button class="detail-modal-close absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-lg cursor-pointer hover:bg-slate-200 transition-colors" id="admin-edit-modal-close">✕</button>
+            
+            <div id="admin-edit-content">
+                <h3 class="text-xl font-bold text-center text-slate-800 mb-4">✏️ 管理员编辑</h3>
+                <form id="admin-edit-form">
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">标题</label>
+                        <input type="text" id="admin-edit-title" required class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">描述</label>
+                        <textarea id="admin-edit-content-text" rows="4" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 resize-none"></textarea>
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">状态</label>
+                        <select id="admin-edit-status" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                            <option value="open">招募中</option>
+                            <option value="full">已满</option>
+                            <option value="completed">已完成</option>
+                            <option value="cancelled">已取消</option>
+                            <option value="expired">已过期</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">当前人数 / 总人数</label>
+                        <div class="form-row flex items-center gap-3">
+                            <input type="number" id="admin-edit-current" min="0" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                            <span class="font-semibold text-slate-500">/</span>
+                            <input type="number" id="admin-edit-max" min="1" required class="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                        </div>
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">出发地</label>
+                        <input type="text" id="admin-edit-departure" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">目的地</label>
+                        <input type="text" id="admin-edit-destination" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">时间</label>
+                        <input type="datetime-local" id="admin-edit-time" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">费用</label>
+                        <input type="number" id="admin-edit-cost" min="0" step="0.01" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">商品名称</label>
+                        <input type="text" id="admin-edit-product-name" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">拼单价</label>
+                        <input type="number" id="admin-edit-product-group-price" min="0" step="0.01" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <div class="form-group flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-slate-700">活动地点</label>
+                        <input type="text" id="admin-edit-location" class="px-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100">
+                    </div>
+                    <button type="submit" class="btn-submit w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-semibold cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all mt-4">保存修改</button>
+                </form>
             </div>
         </div>
     </div>

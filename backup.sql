@@ -118,10 +118,32 @@ CREATE TABLE IF NOT EXISTS public.planet_members (
     group_id UUID NOT NULL REFERENCES public.planets_posts(id),
     user_id UUID NOT NULL REFERENCES public.planet_users(id),
     status TEXT DEFAULT 'pending',
+    party_size INT DEFAULT 1,
     joined_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(group_id, user_id)
 );
 ALTER TABLE public.planet_members ENABLE ROW LEVEL SECURITY;
+
+-- 触发器函数：自动计算 current_participants
+CREATE OR REPLACE FUNCTION public.update_post_participants()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE public.planets_posts
+    SET current_participants = (
+        SELECT COALESCE(SUM(party_size), 0)
+        FROM public.planet_members
+        WHERE group_id = NEW.group_id AND status = 'approved'
+    )
+    WHERE id = NEW.group_id;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 触发器：当 planet_members 发生变化时自动更新 current_participants
+DROP TRIGGER IF EXISTS trigger_update_participants ON public.planet_members;
+CREATE TRIGGER trigger_update_participants
+AFTER INSERT OR UPDATE OR DELETE ON public.planet_members
+FOR EACH ROW EXECUTE FUNCTION public.update_post_participants();
 
 -- planet_admins - 管理员表
 CREATE TABLE IF NOT EXISTS public.planet_admins (
@@ -205,6 +227,8 @@ DROP POLICY IF EXISTS "Admin can update all users" ON public.planet_users;
 CREATE POLICY "Admin can update all users" ON public.planet_users
     FOR UPDATE USING (
         EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
+    ) WITH CHECK (
+        EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
     );
 
 DROP POLICY IF EXISTS "Admin can delete users" ON public.planet_users;
@@ -234,11 +258,19 @@ DROP POLICY IF EXISTS "Admin can update all posts" ON public.planets_posts;
 CREATE POLICY "Admin can update all posts" ON public.planets_posts
     FOR UPDATE USING (
         EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
+    ) WITH CHECK (
+        EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
     );
 
 DROP POLICY IF EXISTS "Admin can delete all posts" ON public.planets_posts;
 CREATE POLICY "Admin can delete all posts" ON public.planets_posts
     FOR DELETE USING (
+        EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
+    );
+
+DROP POLICY IF EXISTS "Admin can insert all posts" ON public.planets_posts;
+CREATE POLICY "Admin can insert all posts" ON public.planets_posts
+    FOR INSERT WITH CHECK (
         EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
     );
 
