@@ -1,6 +1,6 @@
 -- ==============================================
 -- 拼搭星球数据库完整备份
--- 生成时间: 2026-07-06
+-- 生成时间: 2026-07-09
 -- ==============================================
 
 SET statement_timeout = 0;
@@ -47,6 +47,22 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.set_planet_admin(TEXT) TO anon;
+
+CREATE OR REPLACE FUNCTION public.update_post_participants()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE public.planets_posts
+    SET current_participants = (
+        SELECT COALESCE(SUM(party_size), 0)
+        FROM public.planet_members
+        WHERE group_id = NEW.group_id AND status = 'approved'
+    )
+    WHERE id = NEW.group_id;
+    RETURN NULL;
+END;
+$$;
 
 -- ==============================================
 -- 3. 创建表结构 (DDL)
@@ -199,6 +215,11 @@ FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER planet_groups_updated_at
 BEFORE UPDATE ON public.planet_groups
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trigger_update_participants ON public.planet_members;
+CREATE TRIGGER trigger_update_participants
+AFTER INSERT OR UPDATE OR DELETE ON public.planet_members
+FOR EACH ROW EXECUTE FUNCTION public.update_post_participants();
 
 -- ==============================================
 -- 6. 创建 RLS 策略

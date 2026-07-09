@@ -1642,6 +1642,7 @@ async function loadModalData(type) {
                     .from('planets_posts')
                     .select('id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at')
                     .eq('creator_id', userId)
+                    .in('status', ['open', 'full'])
                     .order('created_at', { ascending: false });
                 
                 if (createdError) {
@@ -1651,6 +1652,16 @@ async function loadModalData(type) {
                 }
                 
                 data = createdPosts || [];
+                
+                if (currentLocation) {
+                    data = data.map(item => {
+                        if (item.lat && item.lng) {
+                            item.distance = getDistance(currentLocation.lat, currentLocation.lng, item.lat, item.lng);
+                        }
+                        return item;
+                    });
+                }
+                
                 body.innerHTML = renderPostList(data, true);
                 break;
                 
@@ -1680,7 +1691,7 @@ async function loadModalData(type) {
                     .from('planets_posts')
                     .select('id,title,content,type,category,status,current_participants,max_participants,creator_id,departure,destination,departure_time,cost,product_name,product_group_price,product_location,game_type,game_location,game_time,game_cost,location_name,lat,lng,created_at')
                     .in('id', completedAsMemberGroupIds)
-                    .in('status', ['completed', 'cancelled', 'expired']);
+                    .in('status', ['completed', 'cancelled', 'expired', 'full']);
                 const completedAsMember = completedAsMemberPostsResult.data || [];
                 
                 const allPosts = [...completedAsCreator, ...completedAsMember];
@@ -1692,6 +1703,16 @@ async function loadModalData(type) {
                 }).sort((a, b) => 
                     new Date(b.created_at) - new Date(a.created_at)
                 );
+                
+                if (currentLocation) {
+                    data = data.map(item => {
+                        if (item.lat && item.lng) {
+                            item.distance = getDistance(currentLocation.lat, currentLocation.lng, item.lat, item.lng);
+                        }
+                        return item;
+                    });
+                }
+                
                 body.innerHTML = renderPostList(data, false);
                 break;
                 
@@ -1729,7 +1750,7 @@ async function loadModalData(type) {
                 }
                 
                 const filteredPosts = (postsResult2.data || []).filter(post => {
-                    return !['completed', 'cancelled', 'expired'].includes(post.status);
+                    return post.creator_id !== userId && !['completed', 'cancelled', 'expired', 'full'].includes(post.status);
                 });
                 
                 if (filteredPosts.length === 0) {
@@ -1737,10 +1758,20 @@ async function loadModalData(type) {
                     break;
                 }
                 
-                const postsWithMemberStatus = filteredPosts.map(post => {
+                let postsWithMemberStatus = filteredPosts.map(post => {
                     const member = memberData.find(m => m.group_id === post.id);
                     return { ...post, member_status: member?.status || 'approved' };
                 });
+                
+                if (currentLocation) {
+                    postsWithMemberStatus = postsWithMemberStatus.map(item => {
+                        if (item.lat && item.lng) {
+                            item.distance = getDistance(currentLocation.lat, currentLocation.lng, item.lat, item.lng);
+                        }
+                        return item;
+                    });
+                }
+                
                 body.innerHTML = renderPostList(postsWithMemberStatus, false, true);
                 break;
                 
@@ -1940,6 +1971,13 @@ function renderPostList(posts, isCreator, showMemberStatus = false) {
             actionButtons = '<button class="join-btn btn-disabled">已过期</button>';
         }
         
+        let distanceInfo = '';
+        if (item.distance !== undefined && item.distance !== null && item.distance > 0) {
+            distanceInfo = `<span>📍 ${item.distance}</span>`;
+        } else if (item.location_name) {
+            distanceInfo = `<span>📍 ${item.location_name}</span>`;
+        }
+        
         return `
             <div class="section-card" style="margin-bottom: 16px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
@@ -1952,7 +1990,7 @@ function renderPostList(posts, isCreator, showMemberStatus = false) {
                         <p style="font-size: 0.875rem; color: #64748b; margin-bottom: 8px;">${item.content}</p>
                         <div style="display: flex; align-items: center; gap: 16px; font-size: 0.875rem; color: #64748b;">
                             <span>👥 已参与: ${currentMembers} / ${maxMembers}</span>
-                            ${item.location_name ? `<span>📍 ${item.location_name}</span>` : ''}
+                            ${distanceInfo}
                             ${item.created_at ? `<span>📅 ${new Date(item.created_at).toLocaleDateString()}</span>` : ''}
                         </div>
                         ${item.departure && item.destination ? `<div style="font-size: 0.875rem; color: #64748b; margin-top: 4px;">🚗 ${item.departure} → ${item.destination}</div>` : ''}
@@ -2932,11 +2970,11 @@ async function loadProfileCounts(userId) {
         ]);
         
         const allCreatedPosts = allCreatedPostsResult.data || [];
-        const createdCount = allCreatedPosts.length;
         
-        const activeCreatedPostIds = allCreatedPosts
-            .filter(p => ['open', 'full'].includes(p.status))
-            .map(p => p.id);
+        const activeCreatedPosts = allCreatedPosts.filter(p => ['open', 'full'].includes(p.status));
+        const createdCount = activeCreatedPosts.length;
+        
+        const activeCreatedPostIds = activeCreatedPosts.map(p => p.id);
         
         const [receivedPendingMembersResult, myPendingPostsResult, joinedPostsResult] = await Promise.all([
             activeCreatedPostIds.length > 0 ? window.supabaseClient
@@ -2953,7 +2991,7 @@ async function loadProfileCounts(userId) {
             
             (joinedMembersResult.data || []).length > 0 ? window.supabaseClient
                 .from('planets_posts')
-                .select('id, status')
+                .select('id, status, creator_id')
                 .in('id', (joinedMembersResult.data || []).map(m => m.group_id)) : { data: [] }
         ]);
         
@@ -2963,7 +3001,7 @@ async function loadProfileCounts(userId) {
         
         const joinedPosts = joinedPostsResult.data || [];
         const activeJoinedPosts = joinedPosts.filter(post => {
-            return !['completed', 'cancelled', 'expired'].includes(post.status);
+            return post.creator_id !== userId && !['completed', 'cancelled', 'expired', 'full'].includes(post.status);
         });
         const joinedCount = activeJoinedPosts.length;
         
@@ -2975,7 +3013,7 @@ async function loadProfileCounts(userId) {
         
         const completedAsMemberIds = new Set(
             joinedPosts
-                .filter(post => ['completed', 'cancelled', 'expired'].includes(post.status))
+                .filter(post => post.creator_id !== userId && ['completed', 'cancelled', 'expired', 'full'].includes(post.status))
                 .map(post => post.id)
         );
         
