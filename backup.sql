@@ -210,8 +210,9 @@ CREATE POLICY "Users can insert own profile" ON public.planet_users
     FOR INSERT WITH CHECK (auth.uid() = id);
 
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.planet_users;
-CREATE POLICY "Users can view their own profile" ON public.planet_users
-    FOR SELECT USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Everyone can view public profile" ON public.planet_users;
+CREATE POLICY "Everyone can view public profile" ON public.planet_users
+    FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Users can update their own profile" ON public.planet_users;
 CREATE POLICY "Users can update their own profile" ON public.planet_users
@@ -239,8 +240,9 @@ CREATE POLICY "Admin can delete users" ON public.planet_users
 
 -- planets_posts 策略
 DROP POLICY IF EXISTS "Authenticated can view posts" ON public.planets_posts;
-CREATE POLICY "Authenticated can view posts" ON public.planets_posts
-    FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Everyone can view posts" ON public.planets_posts;
+CREATE POLICY "Everyone can view posts" ON public.planets_posts
+    FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Authenticated can insert posts" ON public.planets_posts;
 CREATE POLICY "Authenticated can insert posts" ON public.planets_posts

@@ -301,8 +301,8 @@ CREATE POLICY "Admin can delete all members" ON planet_members
 CREATE POLICY "Everyone can view admin list" ON planet_admins
     FOR SELECT USING (true);
     
-    CREATE POLICY "Authenticated can view posts" ON planets_posts
-        FOR SELECT USING (auth.role() = 'authenticated');
+    CREATE POLICY "Everyone can view posts" ON planets_posts
+        FOR SELECT USING (true);
     
     CREATE POLICY "Authenticated can insert posts" ON planets_posts
         FOR INSERT WITH CHECK (auth.uid() = creator_id);
