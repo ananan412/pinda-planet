@@ -327,33 +327,39 @@ CREATE POLICY "Everyone can view admin list" ON public.planet_admins
     FOR SELECT USING (true);
 
 -- planet_groups 策略
-DROP POLICY IF EXISTS "Everyone can view all groups" ON public.planet_groups;
-CREATE POLICY "Everyone can view all groups" ON public.planet_groups
-    FOR SELECT USING (true);
+-- planet_groups 策略（仅当表存在时）
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'planet_groups') THEN
+        DROP POLICY IF EXISTS "Everyone can view all groups" ON public.planet_groups;
+        CREATE POLICY "Everyone can view all groups" ON public.planet_groups
+            FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Users can insert groups" ON public.planet_groups;
-CREATE POLICY "Users can insert groups" ON public.planet_groups
-    FOR INSERT WITH CHECK (auth.uid() = creator_id);
+        DROP POLICY IF EXISTS "Users can insert groups" ON public.planet_groups;
+        CREATE POLICY "Users can insert groups" ON public.planet_groups
+            FOR INSERT WITH CHECK (auth.uid() = creator_id);
 
-DROP POLICY IF EXISTS "Creator can update group" ON public.planet_groups;
-CREATE POLICY "Creator can update group" ON public.planet_groups
-    FOR UPDATE USING (auth.uid() = creator_id);
+        DROP POLICY IF EXISTS "Creator can update group" ON public.planet_groups;
+        CREATE POLICY "Creator can update group" ON public.planet_groups
+            FOR UPDATE USING (auth.uid() = creator_id);
 
-DROP POLICY IF EXISTS "Creator can delete group" ON public.planet_groups;
-CREATE POLICY "Creator can delete group" ON public.planet_groups
-    FOR DELETE USING (auth.uid() = creator_id);
+        DROP POLICY IF EXISTS "Creator can delete group" ON public.planet_groups;
+        CREATE POLICY "Creator can delete group" ON public.planet_groups
+            FOR DELETE USING (auth.uid() = creator_id);
 
-DROP POLICY IF EXISTS "Admin can update all groups" ON public.planet_groups;
-CREATE POLICY "Admin can update all groups" ON public.planet_groups
-    FOR UPDATE USING (
-        EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
-    );
+        DROP POLICY IF EXISTS "Admin can update all groups" ON public.planet_groups;
+        CREATE POLICY "Admin can update all groups" ON public.planet_groups
+            FOR UPDATE USING (
+                EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
+            );
 
-DROP POLICY IF EXISTS "Admin can delete all groups" ON public.planet_groups;
-CREATE POLICY "Admin can delete all groups" ON public.planet_groups
-    FOR DELETE USING (
-        EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
-    );
+        DROP POLICY IF EXISTS "Admin can delete all groups" ON public.planet_groups;
+        CREATE POLICY "Admin can delete all groups" ON public.planet_groups
+            FOR DELETE USING (
+                EXISTS (SELECT 1 FROM public.planet_admins a WHERE a.user_id = auth.uid())
+            );
+    END IF;
+END $$;
 
 -- ==============================================
 -- 8. 插入数据 (INSERT)

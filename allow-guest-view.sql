@@ -24,9 +24,14 @@ DROP POLICY IF EXISTS "Everyone can view admin list" ON public.planet_admins;
 CREATE POLICY "Everyone can view admin list" ON public.planet_admins
     FOR SELECT USING (true);
 
--- 5. 允许所有人查看群组信息
-DROP POLICY IF EXISTS "Everyone can view all groups" ON public.planet_groups;
-CREATE POLICY "Everyone can view all groups" ON public.planet_groups
-    FOR SELECT USING (true);
+-- 5. 允许所有人查看群组信息（仅当表存在时）
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'planet_groups') THEN
+        DROP POLICY IF EXISTS "Everyone can view all groups" ON public.planet_groups;
+        CREATE POLICY "Everyone can view all groups" ON public.planet_groups
+            FOR SELECT USING (true);
+    END IF;
+END $$;
 
 SELECT '✅ 游客查看权限已启用！' as result;
