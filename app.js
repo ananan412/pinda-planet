@@ -2287,6 +2287,11 @@ async function handleLogin(email, password) {
             }
             
             alert('登录成功！欢迎来到拼搭星球 🪐');
+            
+            const sort = document.getElementById('sort-select')?.value || 'latest';
+            const { data: postsData } = await fetchPosts('', 1, 50, getEffectiveCategory(), sort);
+            await renderCards(postsData);
+            
             executePendingAction();
         } else {
             console.error('❌ Login returned no user');
