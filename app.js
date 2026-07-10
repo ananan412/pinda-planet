@@ -491,6 +491,8 @@ async function fetchPosts(keyword = '', page = 1, pageSize = 20, type = '', sort
             if (currentSubCategory && currentSubCategory !== '全部') {
                 filter['category'] = `eq.${currentSubCategory}`;
             }
+        } else if (type) {
+            filter['type'] = `eq.${type}`;
         }
         
         if (keyword && keyword.trim()) {
@@ -581,7 +583,10 @@ function debounceSearch() {
             currentMainCategory = 'carpool';
         }
         
-        const effectiveType = searchCategory || getEffectiveCategory();
+        let effectiveType = searchCategory;
+        if (!effectiveType && !keyword.trim()) {
+            effectiveType = getEffectiveCategory();
+        }
         const { data } = await fetchPosts(keyword, 1, 50, effectiveType, sort, '');
         hideSkeleton();
         await renderCards(data);
@@ -597,7 +602,10 @@ function debounceSort() {
         
         showSkeleton();
         
-        const effectiveType = searchCategory || getEffectiveCategory();
+        let effectiveType = searchCategory;
+        if (!effectiveType && !keyword.trim()) {
+            effectiveType = getEffectiveCategory();
+        }
         const { data } = await fetchPosts(keyword, 1, 50, effectiveType, sort, '');
         hideSkeleton();
         await renderCards(data);
