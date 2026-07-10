@@ -352,6 +352,7 @@ async function requestLocation() {
                 console.warn('⚠️ 获取位置失败:', error.message);
                 if (error.code === 1) {
                     console.warn('⚠️ 用户拒绝定位权限');
+                    showLocationPermissionTip();
                 } else if (error.code === 2) {
                     console.warn('⚠️ 无法获取位置信息');
                 } else if (error.code === 3) {
@@ -361,11 +362,34 @@ async function requestLocation() {
             },
             {
                 enableHighAccuracy: false,
-                timeout: 3000,
+                timeout: 5000,
                 maximumAge: 300000
             }
         );
     });
+}
+
+function showLocationPermissionTip() {
+    if (document.getElementById('location-permission-tip')) return;
+    
+    const tip = document.createElement('div');
+    tip.id = 'location-permission-tip';
+    tip.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-lg z-50 flex items-center gap-3';
+    tip.innerHTML = `
+        <span class="text-lg">📍</span>
+        <div>
+            <p class="font-medium">需要定位权限</p>
+            <p class="text-xs text-slate-300">请在浏览器设置中允许位置权限，以便显示距离信息</p>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white">&times;</button>
+    `;
+    
+    document.body.appendChild(tip);
+    
+    setTimeout(() => {
+        const el = document.getElementById('location-permission-tip');
+        if (el) el.remove();
+    }, 8000);
 }
 
 async function fetchCurrentLocation() {
